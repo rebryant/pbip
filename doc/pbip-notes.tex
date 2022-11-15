@@ -1,0 +1,453 @@
+\documentclass{easychair}
+%\documentclass[runningheads]{llncs}
+
+\usepackage{latexsym}
+%\usepackage{times}
+\usepackage{amsmath}
+\usepackage{stmaryrd}
+\usepackage{graphicx}
+\usepackage{pict2e}
+\usepackage{tikz}
+%%\usepackage{pgfplots}
+%%\pgfplotsset{compat=1.14}
+\usepackage{cite}
+\usepackage{booktabs}
+\usepackage{adjustbox}
+\usepackage{marvosym}
+%\usepackage{hyperref}
+%% Colored hyperlink 
+\newcommand{\cref}[2]{\href{#1}{\color{blue}#2}}
+%% Colored hyperlink showing link in TT font
+% \newcommand{\chref}[1]{\href{#1}{\small\tt \color{blue}#1}}
+\newcommand{\hcref}[1]{\cref{#1}{\small\tt #1}}
+%% Change tt font
+\usepackage{inconsolata}
+\usepackage[T1]{fontenc}
+\usepackage{alltt}
+%% ccode- for displaying formatted C code (c2tex) 
+\newenvironment{ccode}%
+{\begin{alltt}}%
+{\end{alltt}}
+
+\bibliographystyle{abbrv}
+%\bibliographystyle{splncs04}
+
+%% Putting labels in pictures
+\newcommand{\booland}{\land}
+\newcommand{\boolor}{\lor}
+\newcommand{\boolxor}{\oplus}
+\newcommand{\boolnot}{\neg}
+\newcommand{\tautology}{\top}
+\newcommand{\nil}{\bot}
+\renewcommand{\obar}[1]{\overline{#1}}
+\newcommand{\lit}{\ell}
+\newcommand{\ite}{\mbox{\it ITE}}
+\newcommand{\restrict}[2]{#1|_{#2}}
+\newcommand{\trust}[1]{\dot {#1}}
+\newcommand{\assign}{\rho}
+\newcommand{\indices}{I}
+\newcommand{\uprop}[1]{\beta[#1]}
+\newcommand{\imply}{\Rightarrow}
+
+
+\newcommand{\opname}[1]{\mbox{\sc #1}}
+\newcommand{\andop}{\opname{And}}
+\newcommand{\implyop}{\opname{Imply}}
+
+\newcommand{\applyand}{\opname{ApplyAnd}}
+\newcommand{\applyor}{\opname{ApplyOr}}
+\newcommand{\applyimply}{\opname{ProveImplication}}
+
+\newcommand{\turnstile}{\models}
+\newcommand{\func}[1]{\llbracket#1\rrbracket}
+
+\newcommand{\fname}[1]{\mbox{\small\sf #1}}
+
+\newcommand{\lo}{\fname{Lo}}
+\newcommand{\hi}{\fname{Hi}}
+\newcommand{\var}{\fname{Var}}
+\newcommand{\val}{\fname{Val}}
+\newcommand{\xvar}[1]{#1}
+\newcommand{\node}[1]{\mathbf{#1}}
+
+% Code formatting
+\newcommand{\showcomment}[1]{\texttt{/*} \textit{#1} \texttt{*/}}
+\newcommand{\keyword}[1]{\textbf{#1}}
+\newcommand{\keyif}{\keyword{if}}
+\newcommand{\keyfor}{\keyword{for}}
+\newcommand{\keyelse}{\keyword{else}}
+\newcommand{\keyor}{\keyword{or}}
+\newcommand{\keyreturn}{\keyword{return}}
+%\newcommand{\assign}{\ensuremath{\longleftarrow}}
+
+\definecolor{redorange}{rgb}{0.878431, 0.235294, 0.192157}
+\definecolor{lightblue}{rgb}{0.552941, 0.72549, 0.792157}
+\definecolor{clearyellow}{rgb}{0.964706, 0.745098, 0}
+\definecolor{clearorange}{rgb}{0.917647, 0.462745, 0}
+\definecolor{mildgray}{rgb}{0.54902, 0.509804, 0.47451}
+\definecolor{softblue}{rgb}{0.643137, 0.858824, 0.909804}
+\definecolor{bluegray}{rgb}{0.141176, 0.313725, 0.603922}
+\definecolor{lightgreen}{rgb}{0.709804, 0.741176, 0}
+\definecolor{darkgreen}{rgb}{0.152941, 0.776471, 0.172549}
+\definecolor{redpurple}{rgb}{0.835294, 0, 0.196078}
+\definecolor{midblue}{rgb}{0, 0.592157, 0.662745}
+\definecolor{clearpurple}{rgb}{0.67451, 0.0784314, 0.352941}
+\definecolor{browngreen}{rgb}{0.333333, 0.313725, 0.145098}
+\definecolor{darkestpurple}{rgb}{0.396078, 0.113725, 0.196078}
+\definecolor{greypurple}{rgb}{0.294118, 0.219608, 0.298039}
+\definecolor{darkturquoise}{rgb}{0, 0.239216, 0.298039}
+\definecolor{darkbrown}{rgb}{0.305882, 0.211765, 0.160784}
+\definecolor{midgreen}{rgb}{0.560784, 0.6, 0.243137}
+\definecolor{darkred}{rgb}{0.576471, 0.152941, 0.172549}
+\definecolor{darkpurple}{rgb}{0.313725, 0.027451, 0.470588}
+\definecolor{darkestblue}{rgb}{0, 0.156863, 0.333333}
+\definecolor{lightpurple}{rgb}{0.776471, 0.690196, 0.737255}
+\definecolor{softgreen}{rgb}{0.733333, 0.772549, 0.572549}
+\definecolor{offwhite}{rgb}{0.839216, 0.823529, 0.768627}
+
+
+\title{Notes on \\ Pseudo-Boolean Implication Proofs \\ Version of \today}
+
+\author{Randal E. Bryant}
+\institute{
+Computer Science Department \\
+Carnegie Mellon University, Pittsburgh, PA, United States\\
+\email{Randy.Bryant@cs.cmu.edu}
+}
+
+
+\begin{document}
+
+\maketitle
+
+This notes describes some ideas on converting unsatisfiability proofs
+for pseudo-Boolean (PB) constraints into clausal proofs based on the
+DRAT proof system.
+
+\section{Notation}
+
+This section gives brief definitions of pseudo-Boolean constraints and their properties.
+A more extensive introduction is provided by Gocht in his PhD thesis [Gocht-Phd-2022].
+
+Consider a set of Boolean variables $X = \{ x_1, x_2, \ldots, x_n \}$.  For $x_i \in X$, {\em literal}
+$\lit_i$ can denote either $x_i$ or its negation, written $\obar{x}_i$.  We
+write $\obar{\lit}_i$ to denote $\obar{x}_i$ when $\lit_i = x_i$ and $x_i$ when
+$\lit_i = \obar{x}_i$.
+
+A {\em pseudo-Boolean constraint} is a linear expression, viewing
+Boolean variables as ranging over integer values $0$ and $1$.  That
+is, for a set of indices $\indices_C \subseteq \{ 1, 2, \ldots, n \}$,
+a constraint $C$ has the form
+\begin{eqnarray}
+\sum_{i \in \indices_C } a_i \lit_i & \# & b \label{eqn:pbconstraint}
+\end{eqnarray}
+where: 1) the relational operator $\#$ is $<$, $\leq$, $=$, $\geq$, or
+$>$, and 2) the coefficients $a_i$, as well as the constant $b$, are
+integers, with the coefficients being nonzero.
+Constraints with relational operator $=$ are referred to as {\em equational constraints},
+while others are referred to as {\em ordering constraints}.
+
+Constraint $C$ denotes a Boolean function, written
+$\func{C}$, mapping assignments to the set of variables $X$ to 1
+(true) or 0 (false).  Constraints $C_1$ and $C_2$ are said to {\em
+  equivalent} when $\func{C_1} = \func{C_2}$.
+Constraint $C$ is said to be {\em infeasible} when $\func{C} = \bot$, i.e., it always evaluates $0$.
+$C$ is said to be {\em trivial} when $\func{C} = \top$, i.e., it always evaluates to $1$.
+
+
+As described in [Gocht-Phd-2022], the following are some properties of pseudo-Boolean constraints:
+\begin{itemize}
+\item Constraints with relational operators $<$, $\leq$, and $>$ can be
+  converted to equivalent constraints with relational operator $\geq$.
+\item
+The logical negation of an ordering constraint $C$, written $\boolnot C$,
+can also be expressed as a constraint.  That is, assume that $C$
+has been converted to a form where it has relational operator $\geq$.
+Then replacing $\geq$ by $<$ yields the negation of $C$.  
+\item
+A constraint $C$ with relational operator $=$ can be converted to the
+pair of constraints $C_{\leq}$ and $C_{\geq}$, formed by replacing
+$\#$ in (\ref{eqn:pbconstraint}) by $\leq$ and $\geq$, respectively.
+These then satisfy $\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.
+\end{itemize}
+We will generally
+assume that constraints have relational operator $\geq$, since other
+forms can be translated to it.  In some contexts, however, we will
+maintain equational constraints 
+intact, to avoid replacing it by two ordering constraints.
+
+
+We consider two {\em normalized forms} for ordering constraints: A
+{\em coefficient-normalized} constraint has only positive
+coefficients.  A {\em variable-normalized} constraint has only
+positive literals.  Converting between the two forms is
+straightforward using the identity $\obar{x}_i = 1-x_i$.  In reasoning
+about PB constraints, the two forms can be used interchangeably.
+Typically, the coefficient-normalized form is more convenient when
+viewing a PB constraint as a logical expression, while the
+variable-normalized form is more convenient when viewing a constraint
+as an arithmetic expression.  In this document, we focus on the logical
+aspects, giving the general form of constraint $C$ as
+\begin{eqnarray}
+\sum_{i \in \indices_C} a_{i} \lit_{i} & \geq & b \label{eqn:coeff-normalized}
+\end{eqnarray}
+with each $a_{i} > 0$.
+
+Ordering constraint $C$ in coefficient-normalized form is trivial if and only
+if $b \leq 0$.  Similarly, $C$ is infeasible if and only if
+$b > \sum_{i \in \indices_C} {a_{i}}$.  By contrast, testing feasiblilty or triviality
+of an equational constraint is not straightforward, in that an instance of the
+subset sum problem [Garey] can be directly encoded as an equational
+constraint.
+
+An {\em assignment} is a mapping $\assign : X' \rightarrow \{0,1\}$,
+for some $X' \subseteq X$.  The assignment is {\em total} when $X' =
+X$ and {\em partial} when $X' \subset X$.  Assignment $\assign$ can
+also be viewed as a set of literals, where $x_i \in \assign$ when
+$\assign(x_i) = 1$ and $\obar{x}_i \in \assign$ when $\assign(x_i) = 0$.
+Finally, assignment $\assign$ can be viewed as the
+pseudo-Boolean constraint $\sum_{l_i \in \assign} l_i \;\geq\;| \assign |$.
+We use these three views interchangeably.  Note also for
+assignments $\assign_1$ and $\assign_2$ over disjoint sets of
+variables $X_1$ and $X_2$, their union is logically equivalent to
+their conjunction: $\func{\assign_1 \cup \assign_2} = \func{\assign_1}
+\land \func{\assign_2}$.
+
+We let $\assign(C)$ denote the constraint resulting when $C$ is
+simplified according assignment $\assign$.  That is, assume $\assign$ is defined over a set of variables $X'$ and
+partition the indices $i \in \indices_C$ into
+three sets:
+$I^{+}$, consisting of those indices $i$ such that $\lit_{i} \in \assign$,
+$I^{-}$, consisting of those indices $i$ such that $\obar{\lit}_{i} \in \assign$,
+and $I^{X}$ consisting of those indices $i$ such that $x_i \not \in X'$.
+With this, $\assign(C)$ can be written
+\begin{eqnarray}
+\sum_{i \in I^{X}} a_{i} \lit_{i} & \geq & b - \sum_{i \in I^{+}} a_{i} \label{eqn:assigned}
+\end{eqnarray}
+
+A pseudo-Boolean {\em formula} $F$ is a set of pseudo-Boolean
+constraints.  We say that $F$ is {\em satisfiable} when there is some
+assignment $\assign$ that satisfies all of the constraints in $F$, and
+{\em unsatisfiable} otherwise.  
+
+\section{Reduction Rules}
+
+{\bf NOTE:} This section provides ideas that would be useful in
+implementing a library for maintaining sets of constraints in
+simplified form.  It is not related to proof generation.
+
+Two equivalence-preserving operations are commonly performed on ordering
+constraints to reduce the magnitudes of their coefficients.  For these
+we assume that $C$ is a non-trivial constraint in
+coefficient-normalized form, and therefore the constant satisfies $b > 0$.
+
+With the {\em division rule},
+suppose
+there is some integer $d > 1$
+such that each coefficient $a_i$ is divisible by $d$.  Then $C$ can be converted to the equivalent constraint
+\begin{eqnarray}
+\sum_{i \in \indices_C} \frac{a_i}{d} \lit_i & \geq & \left\lceil \frac{b}{d} \right\rceil \label{eqn:divide}
+\end{eqnarray}
+
+With the {\em saturation rule}, 
+$C$ can be converted to the equivalent constraint
+\begin{eqnarray}
+\sum_{i \in \indices_C} \min(a_i, b) \cdot \lit_i & \geq & b \label{eqn:saturate}
+\end{eqnarray}
+without changing the underlying constraint.
+
+Unfortunately, the order in which these rules are applied can affect
+their possible use.  Consider, for example the constraint
+$4 x_1 + 16 x_2 + 12 x_3 + 8 x_4 \geq 11$.  In that form, we could divide by $4$ to get
+$x_1 + 4x_2 + 3 x_3 + 2 x_4 \geq 3$ and then apply saturation to get
+$x_1 + 3 x_2 + 3 x_3 + 2 x_4 \geq 3$.
+But applying saturation first would give
+$4 x_1 + 11 x_2 + 11 x_3 + 8 x_4 \geq 11$,
+for which no division rule applies.
+
+We can instead make use of a combination of division and saturation by
+noting that any coefficient $a_i$ such that $a_i \geq b$ could be set to any
+value $a'$ such that $a' \geq b$, including $a' = d \cdot \left\lceil b / d \right\rceil$,
+while maintaining equivalence.  We therefore require only that any divisor $d$ evenly
+divide each coefficient $a_i$ such that $a_i < b$, and express the {\em division-saturation rule} as
+\begin{eqnarray}
+\sum_{i \in \indices_C} \left\lceil \frac{\min(a_i,b)}{d}\right\rceil\cdot \lit_i & \geq & \left\lceil \frac{b}{d} \right\rceil \label{eqn:satdivide}
+\end{eqnarray}
+For example, with constraint
+$4 x_1 + 17 x_2 + 13 x_3 + 8 x_4 \geq 11$, we require only that $4$ and $8$ be divisible by $d$, yielding (for $d=4$) the
+constraint
+$x_1 + 3 x_2 + 3 x_3 + 2 x_4 \geq 3$.
+
+
+Given this combined rule, we can always maintain the constraints so that each satisfies the following:
+\begin{itemize}
+\item Every coefficient $a_i$ satisfies $|a_i| \leq |b|$
+\item The set $\{ | a_i |, i \in \indices_C \; {\rm and} \; |a_i| < b \}$ has greatest common
+  divisor $1$.  This property can be maintained by computing the GCD $d$ of the
+  unsaturated coefficients for a constraint and applying the division-saturation rule if $d > 1$.
+\end{itemize}
+Observe that these conventions can be applied to constraints in both
+coefficient- and variable-normalized forms.
+
+\section{Pseudo-Boolean Implication Proofs}
+
+A Pseudo-Boolean Implication Proof (PBIP) provides a systematic way to
+prove that a PB formula $F$ is unsatisfiable.  It consists of a sequence of ordering constraints
+\begin{displaymath}
+  C_1, C_2, \ldots, C_m, C_{m+1}, \ldots, C_t
+\end{displaymath}  
+such that the first $m$ constraints are those of formula $F$, while the constraints $i$
+with $i > m$ are implied by either one or two of the preceding constraints.
+That is, for each step $i$ with $m < i \leq t$,
+there is a set $H_i \subseteq \{C_1, C_2, \ldots, C_{i-1} \}$ such that $|H_i| \leq 2$ and
+\begin{eqnarray}
+\bigwedge_{C \in H_i} \func{C} & \imply & \func{C_i} \label{eqn:proofsequence}
+\end{eqnarray}
+The proof completes with an infeasible constraint $C_t$.
+By the transitivity of implication, we have therefore proved that $F$ is not satisfiable.
+We refer to the set $H_i$ as the {\em hints} for step $i$.
+
+Unless ${\it P} = {\it NP}$, we cannot guarantee that a proof checker
+can validate even a single step of a PBIP proof in polynomial time.
+In particular, consider an equational constraint $C$ encoding an
+instance of the subset sum problem, and let $C_{\leq}$ and $C_{\geq}$
+denote its conversion into a pair of ordering constraints such that
+$\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.  Consider a PBIP
+proof step to add the constraint $\boolnot C_{\leq}$ having the set
+$\{ C_{\geq} \}$ as hints.  Proving that $\func{C_{\geq}} \imply
+\func{\boolnot C_{\leq}}$, requires proving that $\func{C_{\leq}}
+\land \func{C_{\geq}} = \nil$, i.e., that $C$ is unsatisfiable.
+
+On the other hand, checking the correctness of a PBIP proof can be
+performed in {\em pseudo-polynomial} time, meaning that the complexity will
+be bounded by a polynomially sized formula over the numeric values of
+the integer parameters.  This can be done using binary decision
+diagrams [BBH-2022].  In particular, an ordering constraint over $n$ variables in
+coefficient-normalized form with constant $b$ will have a BDD
+representation with at most $b \cdot n$ nodes.  For proof step where
+the added clause and the hints all have constants less than or equal
+to $b$, the number of BDD operations to validate the step will be
+$O(b^{2} \cdot n)$ when there is a single hint and $O(b^{3} \cdot n)$
+when there are two hints.  This complexity is polynomial in $b$, but
+it would be exponential in the size of a binary representation of $b$.
+
+
+\section{(Reverse) Unit Propagation}
+
+Consider constraint $C$ in coefficient-normalized form.  Literal
+$\lit$ is {\em unit propagated} by $C$ when the assignment $\assign = \{ \obar{\lit} \}$
+causes the constraint $\assign(C)$ to become infeasible.
+Observe that
+a single constraint can unit propagate multiple literals.  For
+example, $4 x_1 + 3 \obar{x}_2 + x_3 \geq 6$ unit propagates both
+$x_1$ and $\obar{x}_2$.  For constraint $C$, we let $\uprop{C}$
+denote the set of literals it unit propagates.  This set can also be
+viewed as a partial assignment, and therefore also a constraint,
+having the property that $\func{C} \imply \func{\uprop{C}}$.
+
+For an ordering constraint $C$ in coefficent-normalized form (\ref{eqn:coeff-normalized}), detecting
+which literals unit propagate is straightforward.  Let $A =
+\sum_{i \in \indices_C} a_{i}$.  Then literal $\lit_{i}$ unit propagates if and only
+if $A - a_{i} < b$, i.e., $a_{i} > A - b$.  For example, the constraint 
+$4 x_1 + 3 \obar{x}_2 + x_3 \geq 6$ has $A = 7$ and $b=6$, yielding $A-b=1$.
+This justifies the unit propagations of both $x_1$ and $\obar{x}_2$.
+
+To perform unit propagation on constraint $C$ in the context of a
+partial assignment $\alpha$, we can use (\ref{eqn:assigned}) to first
+generate the constraint representation of $\assign(C)$.
+
+The {\em reverse unit propagation} (RUP) proof rule [Gocht-Phd-2022] uses
+unit propagation to prove that constraint $C$ can be added to 
+formula $F$ while preserving its set of satisfying assignments.  It
+operates by finding a sequence of constraints $C_0, C_1, \ldots, C_k$,
+with $C_0 = \boolnot C$ and $C_i \in F$ for $1 \leq i \leq k$, and proving that this combination is unsatisfiable.
+
+A successful RUP proof generates a sequence of assignments
+$\assign_0, \assign_1, \ldots, \assign_{k-1}$ with $\assign_0 = \uprop{C_0}$
+and
+$\assign_i = \assign_{i-1} \cup \uprop{\assign_{i-1}(C_i)}$
+for $1 < i < k$.
+That is, it extends the set of unit literals with those obtained by first applying the unit literals to $C_i$ and then performing unit propagation.
+The final clause $C_k$ must then satisfy $\assign_{k-1}(C_k) = \nil$.
+
+Given a RUP proof step, we can generate a sequence of PBIP proof steps that concludes with the addition of clause $C$.
+In particular, the final assignment in the RUP proof yielded the result $\func{\assign_{k-1}(C_k)} = \func{\assign_{k-1}} \land \func{C_k} \imply \nil$, and therefore
+$\func{C_k} \imply \func{\boolnot \assign_{k-1}}$.  Continuing for $1 \leq i < k$, we can see
+$\func{\assign_i} = \func{\assign_{i-1}} \land \func{C_i}$, but the previous step added
+$\boolnot \assign_{i}$, and therefore we can add
+the clause $\boolnot \assign_{i-1}$, with the preceding clause plus clause $C_i$ as hints.  Once we reach $i=1$, we have added the clause $\boolnot \assign_0$,
+and we can therefore add clause $C$ with the preceding clause as its hint, since $\func{C_0} \imply \func{\assign_{0}}$, and therefore
+$\func{\boolnot \assign_0} \imply  \func{\boolnot C_0} = \func{C}$.
+
+Summarizing, the PBIP proof steps will be as follows:
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+  \makebox[3cm]{Added Clause} & \makebox[2cm]{Hints} \\
+  \midrule
+  $\boolnot \assign_{k-1}$ & $C_k$  \\
+  $\boolnot \assign_{k-2}$ & $C_{k-1}$, $\boolnot \assign_{k-1}$ \\
+  $\cdots$ & $\cdots$ \\
+  $\boolnot \assign_{i}$ & $C_{i+1}$, $\boolnot \assign_{i+1}$ \\
+  $\cdots$ & $\cdots$ \\
+  $\boolnot \assign_{0}$ & $C_{1}$, $\boolnot \assign_{1}$ \\
+  $C$ & $\boolnot \assign_{0}$  \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Note in these that the constraint representation of an
+assignment or its inverse has a very simple form.  In particular,
+if
+$\assign = \{\lit_1, \lit_2, \ldots, \lit_k\}$,
+then its contstraint
+representation is $\lit_1 + \lit_2 + \cdots + \lit_k \geq k$.  On the
+other hand, constraint $\boolnot \assign$ can be written as
+$\obar{\lit}_1 + \obar{\lit}_2 + \cdots + \obar{\lit}_k \geq 1$.
+
+\section{RUP Example}
+
+As an example, consider the following three clauses:
+\begin{center}
+  \begin{tabular}{cllllll}
+\toprule    
+\makebox[1cm]{ID} & \multicolumn{6}{c}{Constraint} \\
+\midrule
+$C_1$ & \makebox[0.6cm][l]{$x_1$} & $+$ & \makebox[0.6cm][l]{$2 x_2$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_3$} & \makebox[0.6cm][l]{$\geq 2$} \\
+$C_2$ & $\obar{x}_1$ & $+$ & $\obar{x}_2$ & $+$ & $2 x_3$ & $\geq 2$ \\
+$C_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $2 x_3$ & $\geq 3$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Our goal is to add the clause $C = 2 x_1 + x_2 + x_3 \geq 2$ via RUP using these clauses.  RUP proceeds as follows:
+\begin{enumerate}
+\item
+We can see that $\boolnot C = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_0 = \obar{x}_1 \geq 1$.
+\item
+With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_1 = \obar{x}_1 + x_2 \geq 2$.
+\item
+  Constraint $C_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_2 = \obar{x}_1 + x_2 + x_3 \geq 3$.
+\item
+  Constraint $C_3$ simplifies to $ 0 \geq 1$, which is infeasible.
+\end{enumerate}
+
+This single application of RUP results in the following PBIP proof steps:
+\begin{center}
+  \begin{tabular}{cllllllll}
+\toprule    
+\makebox[1cm]{ID} & \multicolumn{6}{c}{Constraint} & \makebox[0.4cm]{} & \makebox[1cm]{Hints}\\
+\midrule
+$C_4$ & \makebox[0.6cm][l]{$x_1$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_2$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_3$} & \makebox[0.6cm][l]{$\geq 1$} && $C_3$ \\
+$C_5$ & $x_1$ & $+$ & $\obar{x}_2$ & & & $\geq 1$ && $C_2$, $C_4$ \\
+$C_6$ & $x_1$ &     &              & & & $\geq 1$ && $C_1$, $C_5$ \\
+$C$   & $2x_1$ & $+$ & $x_2$ & $+$ & $x_3$ & $\geq 2$ && $C_6$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+
+
+
+%%\bibliography{references}
+
+\end{document}
