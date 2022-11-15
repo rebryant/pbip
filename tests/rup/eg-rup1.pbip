@@ -1,0 +1,22 @@
+* Example of PBIP proof derived (by hand) from application of RUP rules
+* Proof goal is to add C = [1 !x1   1  x2  >= 1]
+* from input clauses C1 and C2
+* !C = [1 x1   1 !x2  >= 2]
+* which propagates x1 and !x2 giving rho_0 = !C
+* Input constraints
+* C1
+i 1 x1 2 x2 -3 x3 >= 0 ; 1 2 3 4 5
+* C1 propagates !x3, giving rho_1 = [1 x1   1 !x2   1 !x3  >= 3]
+* C2
+i 1 x1 1 x2 2 x3 >= 2 ; 6 7 8 9 10
+* C2 yields contradiction
+* C3.  Makes formula unsatisfiable
+i 1 x1 -1 x2 >= 1 ; 11 12 13 14
+* Proof
+* Conflict clause rho_1
+a -1 x1 1 x2 1 x3 >= 0 ; 2
+* Conflict clause rho_0 = target clause
+a -1 x1 1 x2 >= 0 ; 1 4
+* Completion
+* The target clause directly conflicts with clause C3
+a >= 1 ; 3 5
