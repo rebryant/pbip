@@ -75,7 +75,7 @@ def parseObp(line):
         except:
             raise PbipException(line, "Invalid coefficient %s" % scoeff)
         svar = cfields[2*i+1]
-        if svar[0] in '!':
+        if svar[0] in '!~':
             cval -= coeff
             coeff = -coeff
             svar = svar[1:]
