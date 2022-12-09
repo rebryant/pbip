@@ -230,64 +230,6 @@ constraints.  We say that $F$ is {\em satisfiable} when there is some
 assignment $\assign$ that satisfies all of the constraints in $F$, and
 {\em unsatisfiable} otherwise.  
 
-\section{Reduction Rules}
-
-{\bf NOTE:} This section provides ideas that would be useful in
-implementing a library for maintaining sets of constraints in
-simplified form.  It is not related to proof generation.
-
-Two equivalence-preserving operations are commonly performed on ordering
-constraints to reduce the magnitudes of their coefficients.  For these
-we assume that $C$ is a non-trivial constraint in
-coefficient-normalized form, and therefore the constant satisfies $b > 0$.
-
-With the {\em division rule},
-suppose
-there is some integer $d > 1$
-such that each coefficient $a_i$ is divisible by $d$.  Then $C$ can be converted to the equivalent constraint
-\begin{eqnarray}
-\sum_{i \in \indices_C} \frac{a_i}{d} \lit_i & \geq & \left\lceil \frac{b}{d} \right\rceil \label{eqn:divide}
-\end{eqnarray}
-
-With the {\em saturation rule}, 
-$C$ can be converted to the equivalent constraint
-\begin{eqnarray}
-\sum_{i \in \indices_C} \min(a_i, b) \cdot \lit_i & \geq & b \label{eqn:saturate}
-\end{eqnarray}
-without changing the underlying constraint.
-
-Unfortunately, the order in which these rules are applied can affect
-their possible use.  Consider, for example the constraint
-$4 x_1 + 16 x_2 + 12 x_3 + 8 x_4 \geq 11$.  In that form, we could divide by $4$ to get
-$x_1 + 4x_2 + 3 x_3 + 2 x_4 \geq 3$ and then apply saturation to get
-$x_1 + 3 x_2 + 3 x_3 + 2 x_4 \geq 3$.
-But applying saturation first would give
-$4 x_1 + 11 x_2 + 11 x_3 + 8 x_4 \geq 11$,
-for which no division rule applies.
-
-We can instead make use of a combination of division and saturation by
-noting that any coefficient $a_i$ such that $a_i \geq b$ could be set to any
-value $a'$ such that $a' \geq b$, including $a' = d \cdot \left\lceil b / d \right\rceil$,
-while maintaining equivalence.  We therefore require only that any divisor $d$ evenly
-divide each coefficient $a_i$ such that $a_i < b$, and express the {\em division-saturation rule} as
-\begin{eqnarray}
-\sum_{i \in \indices_C} \left\lceil \frac{\min(a_i,b)}{d}\right\rceil\cdot \lit_i & \geq & \left\lceil \frac{b}{d} \right\rceil \label{eqn:satdivide}
-\end{eqnarray}
-For example, with constraint
-$4 x_1 + 17 x_2 + 13 x_3 + 8 x_4 \geq 11$, we require only that $4$ and $8$ be divisible by $d$, yielding (for $d=4$) the
-constraint
-$x_1 + 3 x_2 + 3 x_3 + 2 x_4 \geq 3$.
-
-
-Given this combined rule, we can always maintain the constraints so that each satisfies the following:
-\begin{itemize}
-\item Every coefficient $a_i$ satisfies $|a_i| \leq |b|$
-\item The set $\{ | a_i |, i \in \indices_C \; {\rm and} \; |a_i| < b \}$ has greatest common
-  divisor $1$.  This property can be maintained by computing the GCD $d$ of the
-  unsaturated coefficients for a constraint and applying the division-saturation rule if $d > 1$.
-\end{itemize}
-Observe that these conventions can be applied to constraints in both
-coefficient- and variable-normalized forms.
 
 \section{Pseudo-Boolean Implication Proofs}
 
@@ -315,8 +257,8 @@ denote its conversion into a pair of ordering constraints such that
 $\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.  Consider a PBIP
 proof step to add the constraint $\boolnot C_{\leq}$ having the set
 $\{ C_{\geq} \}$ as hints.  Proving that $\func{C_{\geq}} \imply
-\func{\boolnot C_{\leq}}$, requires proving that $\func{C_{\leq}}
-\land \func{C_{\geq}} = \nil$, i.e., that $C$ is unsatisfiable.
+\func{\boolnot C_{\leq}}$, requires proving that
+$\func{C_{\leq}} \land \func{C_{\geq}} = \nil$, i.e., that $C$ is unsatisfiable.
 
 On the other hand, checking the correctness of a PBIP proof can be
 performed in {\em pseudo-polynomial} time, meaning that the complexity will
@@ -351,6 +293,7 @@ which literals unit propagate is straightforward.  Let $A =
 if $A - a_{i} < b$, i.e., $a_{i} > A - b$.  For example, the constraint 
 $4 x_1 + 3 \obar{x}_2 + x_3 \geq 6$ has $A = 7$ and $b=6$, yielding $A-b=1$.
 This justifies the unit propagations of both $x_1$ and $\obar{x}_2$.
+A constraint of the form $\lit \geq 1$ is the constraint representation of a unit clause---it will unit propagate $\lit$.
 
 To perform unit propagation on constraint $C$ in the context of a
 partial assignment $\alpha$, we can use (\ref{eqn:assigned}) to first
