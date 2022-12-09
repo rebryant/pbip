@@ -744,7 +744,7 @@ class Manager:
                 comment = "Justification that %s & %s ==> %s" % (nodeA.label(), nodeB.label(), nodeC.label())
                 justification = self.vresolver.run(targetClause, splitVar.id, hints, comment)
         else:
-            justification = resolver.tautologyId, []
+            justification = resolver.tautologyId
 
         self.operationCache[key] = (check, justification)
         if justification != resolver.tautologyId:
