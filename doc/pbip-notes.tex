@@ -415,7 +415,7 @@ As an example, consider the following three clauses:
 \midrule
 $C_1$ & \makebox[0.6cm][l]{$x_1$} & $+$ & \makebox[0.6cm][l]{$2 x_2$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_3$} & \makebox[0.6cm][l]{$\geq 2$} \\
 $C_2$ & $\obar{x}_1$ & $+$ & $\obar{x}_2$ & $+$ & $2 x_3$ & $\geq 2$ \\
-$C_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $2 x_3$ & $\geq 3$ \\
+$C_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $3 \obar{x}_3$ & $\geq 3$ \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -428,7 +428,7 @@ With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this 
 \item
   Constraint $C_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_2 = \obar{x}_1 + x_2 + x_3 \geq 3$.
 \item
-  Constraint $C_3$ simplifies to $ 0 \geq 1$, which is infeasible.
+  Constraint $C_3$ simplifies to $ 0 \geq 3$, which is infeasible.
 \end{enumerate}
 
 This single application of RUP results in the following PBIP proof steps:
