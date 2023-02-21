@@ -9,11 +9,11 @@ import solver
 import pbip
 
 def usage(name):
-    print("Usage %s: [-h] [-v VERB] -i INFILE.pbip -c OUTFILE.cnf -o OUTFILE.pbib")
+    print("Usage %s: [-h] [-v VERB] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
     print("  -h              Print this message")
     print("  -v VERB         Set verbosity level")
-    print("  -i INFILE.pbip  Input PBIP file (with unhinted inputs)")
-    print("  -o OUTFILE.pbip Output PBIP file")
+    print("  -i INFILE.ipbip Input PBIP file (with unhinted inputs)")
+    print("  -o OUTFILE.pbip Output PBIP file (with hints)")
     print("  -c OUTFILE.cnf  Output CNF file")
 
 

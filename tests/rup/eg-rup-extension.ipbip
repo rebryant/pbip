@@ -1,0 +1,41 @@
+*** Example use of extension rule to validate proof
+* Input clauses
+* Input clause #1
+i       1 ~x2       1  x4            >= 1 ;
+* Input clause #2
+i 1 ~x1             1 ~x4            >= 1 ;
+* Input clause #3
+i             1 ~x3       1  x5      >= 1 ;
+* Input clause #4
+i             1 ~x3       1 ~x5      >= 1 ;
+** Target: Want to add clause 2 ~x1 1 ~x2 1 ~x3 >= 2
+* Input clause #5: Contradict our proposed target clause
+i 2  x1 1  x2 1  x3 >= 3 ;
+** Introduce extension variable x6, with x6 <=> 1 ~x2 1 ~x3 >= 2
+** Don't have rule yet, so add these as input clauses
+* Clause #6
+i        1  x2 1  x3            1  x6 >= 1 ;
+* Clause #7
+i        1 ~x2 1 ~x3            2 ~x6 >= 2;
+** New target: 1 ~x1 1  x6 >= 1
+** Negated target 1  x1 1 ~x6 >= 2 (Units x1, ~x6)
+** Clause 2 propagates ~x4
+** Clause 1 propagates ~x2
+** Clause 6 propagates  x3
+** Clause 3 propagates  x5
+** Clause 4 gives conflict
+* Proof clause #8
+a 1 ~x1 1  x2 1 ~x3 1  x4 1 ~x5 1  x6 >= 1 ; 4
+* Proof clause #9
+a 1 ~x1 1  x2 1 ~x3 1  x4       1  x6 >= 1 ; 3 8
+* Proof clause #10
+a 1 ~x1 1  x2       1  x4       1  x6 >= 1 ; 6 9
+* Proof clause #11
+a 1 ~x1             1  x4       1  x6 >= 1 ; 1 10
+* Proof clause #12
+a 1 ~x1                         1  x6 >= 1 ; 2 11
+* Proof clause #13 = Target
+a 2 ~x1 1 ~x2 1 ~x3                   >= 2 ; 7 12
+* Should contract input clause #5
+a                                     >= 1 ; 5 13
+

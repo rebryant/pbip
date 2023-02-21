@@ -45,6 +45,7 @@
 \newcommand{\restrict}[2]{#1|_{#2}}
 \newcommand{\trust}[1]{\dot {#1}}
 \newcommand{\assign}{\rho}
+\newcommand{\nassign}{\obar{\assign}}
 \newcommand{\indices}{I}
 \newcommand{\uprop}[1]{\beta[#1]}
 \newcommand{\imply}{\Rightarrow}
@@ -160,7 +161,7 @@ As described in [Gocht-Phd-2022], the following are some properties of pseudo-Bo
 \item Constraints with relational operators $<$, $\leq$, and $>$ can be
   converted to equivalent constraints with relational operator $\geq$.
 \item
-The logical negation of an ordering constraint $C$, written $\boolnot C$,
+The logical negation of an ordering constraint $C$, written $\obar{C}$,
 can also be expressed as a constraint.  That is, assume that $C$
 has been converted to a form where it has relational operator $\geq$.
 Then replacing $\geq$ by $<$ yields the negation of $C$.  
@@ -206,12 +207,19 @@ X$ and {\em partial} when $X' \subset X$.  Assignment $\assign$ can
 also be viewed as a set of literals, where $x_i \in \assign$ when
 $\assign(x_i) = 1$ and $\obar{x}_i \in \assign$ when $\assign(x_i) = 0$.
 Finally, assignment $\assign$ can be viewed as the
-pseudo-Boolean constraint $\sum_{l_i \in \assign} l_i \;\geq\;| \assign |$.
+pseudo-Boolean constraint $\sum_{\lit_i \in \assign} \lit_i \;\geq\;| \assign |$.
 We use these three views interchangeably.  Note also for
 assignments $\assign_1$ and $\assign_2$ over disjoint sets of
 variables $X_1$ and $X_2$, their union is logically equivalent to
 their conjunction: $\func{\assign_1 \cup \assign_2} = \func{\assign_1}
 \land \func{\assign_2}$.
+
+We shall make use of constraints representing the negations of
+assignments.  That is, the negation of assignment $\assign$, written
+$\nassign$ will is the constraint:
+$\sum_{\lit_i \in \assign} \obar{\lit}_i \;\geq\; 1$.
+Logically, this is equivalent to a clause in a CNF
+representation.
 
 We let $\assign(C)$ denote the constraint resulting when $C$ is
 simplified according assignment $\assign$.  That is, assume $\assign$ is defined over a set of variables $X'$ and
@@ -255,9 +263,9 @@ In particular, consider an equational constraint $C$ encoding an
 instance of the subset sum problem, and let $C_{\leq}$ and $C_{\geq}$
 denote its conversion into a pair of ordering constraints such that
 $\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.  Consider a PBIP
-proof step to add the constraint $\boolnot C_{\leq}$ having the set
-$\{ C_{\geq} \}$ as hints.  Proving that $\func{C_{\geq}} \imply
-\func{\boolnot C_{\leq}}$, requires proving that
+proof step to add the constraint $\obar{C}_{\leq}$ having the 
+$C_{\geq}$ as the only hint.  Proving that
+$\func{C_{\geq}} \imply \func{\obar{C}_{\leq}}$, requires proving that
 $\func{C_{\leq}} \land \func{C_{\geq}} = \nil$, i.e., that $C$ is unsatisfiable.
 
 On the other hand, checking the correctness of a PBIP proof can be
@@ -303,24 +311,24 @@ The {\em reverse unit propagation} (RUP) proof rule [Gocht-Phd-2022] uses
 unit propagation to prove that constraint $C$ can be added to 
 formula $F$ while preserving its set of satisfying assignments.  It
 operates by finding a sequence of constraints $C_0, C_1, \ldots, C_k$,
-with $C_0 = \boolnot C$ and $C_i \in F$ for $1 \leq i \leq k$, and proving that this combination is unsatisfiable.
+with $C_0 = \obar{C}$ and $C_i \in F$ for $1 \leq i \leq k$, and proving that this combination is unsatisfiable.
 
 A successful RUP proof generates a sequence of assignments
-$\assign_0, \assign_1, \ldots, \assign_{k-1}$ with $\assign_0 = \uprop{C_0}$
-and
+$\assign_0, \assign_1, \ldots, \assign_{k-1}$ with $\assign_0 = \uprop{C_0}$, and
 $\assign_i = \assign_{i-1} \cup \uprop{\assign_{i-1}(C_i)}$
-for $1 < i < k$.
+for $1 < i < k$. [{\bf REB NOTE:} What about when $\assign_0$ is empty?]
 That is, it extends the set of unit literals with those obtained by first applying the unit literals to $C_i$ and then performing unit propagation.
 The final clause $C_k$ must then satisfy $\assign_{k-1}(C_k) = \nil$.
 
-Given a RUP proof step, we can generate a sequence of PBIP proof steps that concludes with the addition of clause $C$.
+Given a RUP proof step, we can generate a sequence of PBIP proof steps that concludes with the addition of constraint $C$.
 In particular, the final assignment in the RUP proof yielded the result $\func{\assign_{k-1}(C_k)} = \func{\assign_{k-1}} \land \func{C_k} \imply \nil$, and therefore
-$\func{C_k} \imply \func{\boolnot \assign_{k-1}}$.  Continuing for $1 \leq i < k$, we can see
+$\func{C_k} \imply \func{\nassign_{k-1}}$.
+  Starting with $i = k$ and stepping downward to $i=1$, we can see
 $\func{\assign_i} = \func{\assign_{i-1}} \land \func{C_i}$, but the previous step added
-$\boolnot \assign_{i}$, and therefore we can add
-the clause $\boolnot \assign_{i-1}$, with the preceding clause plus clause $C_i$ as hints.  Once we reach $i=1$, we have added the clause $\boolnot \assign_0$,
+$\nassign_{i}$, and therefore we can add
+the clause $\nassign_{i-1}$, with the preceding clause plus clause $C_i$ as hints.  Once we reach $i=1$, we have added the clause $\nassign_0$,
 and we can therefore add clause $C$ with the preceding clause as its hint, since $\func{C_0} \imply \func{\assign_{0}}$, and therefore
-$\func{\boolnot \assign_0} \imply  \func{\boolnot C_0} = \func{C}$.
+$\func{\nassign_0} \imply  \func{\obar{C}_0} = \func{C}$.
 
 Summarizing, the PBIP proof steps will be as follows:
 \begin{center}
@@ -328,13 +336,13 @@ Summarizing, the PBIP proof steps will be as follows:
 \toprule
   \makebox[3cm]{Added Clause} & \makebox[2cm]{Hints} \\
   \midrule
-  $\boolnot \assign_{k-1}$ & $C_k$  \\
-  $\boolnot \assign_{k-2}$ & $C_{k-1}$, $\boolnot \assign_{k-1}$ \\
+  $\nassign_{k-1}$ & $C_k$  \\
+  $\nassign_{k-2}$ & $C_{k-1}$, $\nassign_{k-1}$ \\
   $\cdots$ & $\cdots$ \\
-  $\boolnot \assign_{i}$ & $C_{i+1}$, $\boolnot \assign_{i+1}$ \\
+  $\nassign_{i}$ & $C_{i+1}$, $\nassign_{i+1}$ \\
   $\cdots$ & $\cdots$ \\
-  $\boolnot \assign_{0}$ & $C_{1}$, $\boolnot \assign_{1}$ \\
-  $C$ & $\boolnot \assign_{0}$  \\
+  $\nassign_{0}$ & $C_{1}$, $\nassign_{1}$ \\
+  $C$ & $\nassign_{0}$  \\
   \bottomrule
 \end{tabular}
 \end{center}
@@ -345,7 +353,7 @@ if
 $\assign = \{\lit_1, \lit_2, \ldots, \lit_k\}$,
 then its contstraint
 representation is $\lit_1 + \lit_2 + \cdots + \lit_k \geq k$.  On the
-other hand, constraint $\boolnot \assign$ can be written as
+other hand, constraint $\nassign$ can be written as
 $\obar{\lit}_1 + \obar{\lit}_2 + \cdots + \obar{\lit}_k \geq 1$.
 
 \section{RUP Example}
@@ -365,7 +373,7 @@ $C_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $3 \obar{x}_3$ & $\geq 3$ \\
 Our goal is to add the clause $C = 2 x_1 + x_2 + x_3 \geq 2$ via RUP using these clauses.  RUP proceeds as follows:
 \begin{enumerate}
 \item
-We can see that $\boolnot C = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_0 = \obar{x}_1 \geq 1$.
+We can see that $\obar{C} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_0 = \obar{x}_1 \geq 1$.
 \item
 With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_1 = \obar{x}_1 + x_2 \geq 2$.
 \item

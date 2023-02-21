@@ -14,10 +14,10 @@ of clauses in conjunctive normal form (CNF).  The clauses for all of
 the constraints are provided as a file in the standard DIMACS format.
 
 Each derived constraint must follow by implication from either one or
-two preceding clauses.  That is, consider PB constraints P_1, P_2, and
-P.  Each of these encodes a Boolean function.  For P to follow from
-P_1, the constraints must satisfy P_1 ==> P.  For P to follow from P_1
-and P_2, the constraints must satisfy P_1 & P_2 ==> P.
+two preceding constraints.  That is, consider PB constraints P_1, P_2,
+and P.  Each of these encodes a Boolean function.  For P to follow
+from P_1, the constraints must satisfy P_1 ==> P.  For P to follow
+from P_1 and P_2, the constraints must satisfy P_1 & P_2 ==> P.
 
 PBIP files build on the OPB format for describing PB constraint
 problems, as documented in:
