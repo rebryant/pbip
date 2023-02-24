@@ -25,7 +25,7 @@ def uncomment(s):
         s = s[1:]
     return s
 
-# Return list of constraints from line of OBP
+# Return list of constraints from line of OPB
 class PbipException(Exception):
     form = ""
     line = ""
@@ -47,7 +47,7 @@ class PbipException(Exception):
 # Return list of Constraint objects
 # List contains one constraint for operations <, <=, >, >=
 # and a pair of constraints for =
-def parseObp(line):
+def parseOpb(line):
     fields = line.split()
     # Get rid of trailing semicolon
     if len(fields) == 0:
@@ -103,14 +103,14 @@ def parseObp(line):
     con1 = pseudoboolean.Constraint(len(nz), cval)
     con1.setNz(nz)
     if rel == '>=':
-        return [con1]
+        return (con1,)
     else:
         cval = -cval
         coeffs = [-c for c in coeffs]
         nz = { v : c for v,c in zip(vars,coeffs) }
         con2 = pseudoboolean.Constraint(len(nz), cval)
         con2.setNz(nz)
-        return [con1, con2]
+        return (con1, con2)
     
 class PbipReader:
     fname = ""
@@ -158,7 +158,7 @@ class PbipReader:
             cstring = cline[:pos]
             hstring = cline[pos+1:]
             try:
-                clist = parseObp(cstring)
+                clist = parseOpb(cstring)
             except PbipException as ex:
                 raise PbipException("", "File %s Line %d: %s" % (self.fname, self.lineCount, str(ex)))
             hfields = hstring.split()

@@ -1,51 +1,90 @@
 The PBIP Pseudo-Boolean Proof Format
 Randal E. Bryant
-12 October 2022
+23 February 2023
 
 The PBIP (Pseudo-Boolean Implication Proof) format describes a
 sequence of transformations on a set of pseudo-Boolean (PB)
-constraints leading to an infeasible constraint.  Each transformation
-follows by implication from one or two previous constraints.  A PBIP
-file therefore describes an unsatisfiability proof for a PB constraint
-problem.
+constraints leading to an infeasible constraint.  The file therefore
+describes an unsatisfiability proof for a PB constraint problem.
 
-The format assumes that each input constraint is encoded as a sequence
-of clauses in conjunctive normal form (CNF).  The clauses for all of
-the constraints are provided as a file in the standard DIMACS format.
+Two reasoning modes are supported:
 
-Each derived constraint must follow by implication from either one or
-two preceding constraints.  That is, consider PB constraints P_1, P_2,
-and P.  Each of these encodes a Boolean function.  For P to follow
-from P_1, the constraints must satisfy P_1 ==> P.  For P to follow
-from P_1 and P_2, the constraints must satisfy P_1 & P_2 ==> P.
+* Implication mode, where each new constraint follows by implication
+  from one or two previous constraints.
+
+* Counterfactual mode, where a "target" constraint is introduced
+  followed by a sequence of implication steps that would hold if the
+  target constraint were false.  The final step in the sequence yields
+  an infeasible constraint, thus showing by contradiction that the
+  target constraint must hold.
+
+
+The format assumes that each input constraint is encoded as a set of
+clauses in conjunctive normal form (CNF).  The clauses for all of the
+constraints are provided as a file in the standard DIMACS format.
+
+When in implication mode, each derived constraint must follow by
+implication from either one or two preceding constraints, referred to
+as the "antecedents".  That is, consider PB constraints P_1, P_2, and
+P.  Each of these encodes a Boolean function.  For P to follow from
+P_1, the constraints must satisfy P_1 ==> P.  For P to follow from P_1
+and P_2, the constraints must satisfy P_1 & P_2 ==> P.  Each
+antecedent constraints can be any of the following: an input
+constraint, one proved by an implication step, or the target
+constraint of a counterfactual reasoning sequence.
+
+When in counterfactual mode, each derived constraint must follow by
+implication from one or two of the preceding constraints.  An
+antecedent can be any of constraints that qualifies as an antecedent
+while in implication mode, as well as: the negation of the target
+constraint or a derived constraint from the same counterfactual
+sequence.
 
 PBIP files build on the OPB format for describing PB constraint
 problems, as documented in:
 
    https://www.cril.univ-artois.fr/PB12/format.pdf
 
-We allow the following extension to the OPB format for writing a PB
-formula: a variable name of the form xN can be preceded by '~' (e.g.,
-~x2) to indicate its negation.
+We allow an extension to the OPB format for writing a PB formula: a
+variable name of the form xN can be preceded by '~' (e.g., ~x2) to
+indicate its logical negation.  This extension is also allowed by many
+other tools.
 
-There are three types of lines:
+There are five types of lines:
 
 1. Comment lines begin with '*' and contain arbitrary text
 
 2. Input lines begin with 'i'.  This is followed by a constraint,
-   expressed in OPB format and terminated by ';' Then a set of clause
+   expressed in OPB format and terminated by ';' Then a set of constraint
    numbers is listed, separated by spaces and terminated with
-   end-of-line.  Forming the conjunction of these clauses and
+   end-of-line.  Forming the conjunction of these constraints and
    existentially quantifying any variables that are not listed in the
    PB formula should yield a Boolean function implying that of the PB
    constraint.
 
-3. Assertion lines begin with 'a'.  This is followed by a constraint,
-   expressed in OPB format and terminated by ';' Then either one or
-   two constraint IDs is listed, separated by spaces and terminated
-   with end-of-line.  Constraints are numbered from 1, starting with
-   the input constraints.
+3. Implication-mode assertion lines begin with 'a'.  This is followed
+   by a constraint, expressed in OPB format and terminated by ';' Then
+   either one or two constraint IDs is listed, separated by spaces and
+   terminated with end-of-line.  Constraints are numbered from 1,
+   starting with the input constraints.
 
+4. Counterfactual mode initiated with a line beginning with 'k',
+   followed by the target constraint, expressed in OPB format and
+   terminated by ';' It has not hints.  It is counted as one of the
+   numbered constraints.
+
+5. Counterfactual assertions lines have the same syntax as
+   implication-mode assertions, except that they start with 'A'.  The
+   constraints listed after the ';' can include -H, where H is the ID
+   of the target constraint.  This is to indicate that these
+   constraints are implied by the logical negation of the target
+   constraint.
+
+An infeasible counterfactual assertion indicates the completion of a
+counterfactual mode sequence.  After that line, other
+implication-assertions can list the ID of the target constraint as an
+antecedent.
+ 
 For an unsatisfiability proof, the final constraint should be
 infeasible, e.g., 0 >= 1.
 
@@ -116,3 +155,60 @@ a -1  x1 -1  x2 -1  x3 -1  x4 -1  x5 -1  x6 -1  x7 -1  x8 >= -2 ; 5 6
 a -1  x1 -1  x2 -1  x3 -1  x4 -1  x5 -1  x6 -1  x7 -1  x8 -1  x9 -1 x10 -1 x11 -1 x12 >= -3 ; 7 11
 * Sum pigeon & hole constraints
 a >= 1 ; 10 12
+
+
+Counterfactual Proof Example
+
+The following example starts with five input constraints.  It uses
+counterfactual reasoning over the first four constraints to justify the
+constraint 2 * ~x1 + 1 * ~x2 + 1 * ~x3 >= 2.  Logically, this is
+equivalent to ~x1 | (~x2 & ~x3).  The fact that a single PB constraint
+can represent a Boolean expression of this complexity demonstrates the
+expressive power of PB constraints.  The fifth input constraint is the
+negation of the target constraint: 2 * x1 + 1 * x2 + 1 * x3 >= 3,
+encoding the Boolean formula x1 & (x2 | x3).  Combining the target
+constraint with input constraint #5 will therefore yield a contradiction.
+
+As in a RUP proof, a counterfactual proof starts by negating the
+target constraint and extracting any until constraints (ones of the
+form x_i >= 1 or ~x_i >= 1).  These unit constraints are then applied
+to other constraints to generate more unit constraints, until eventually a
+conflict is reached.  One interesting feature of PB constraints is
+that the same constraint can be used to perform unit propagation
+multiple times.  For example, our negated target constraint will first
+propagate x1 >= 1, but later, when unit constraint ~x2 >= 1 has been
+propagated, it can then propagate the constraint x3.  The following
+proof demonstrates this idea.
+
+The following example is incomplete in that it does not list which
+clauses encode the input constraints.
+
+* Input constraint #1
+i       1 ~x2       1  x4            >= 1 ;
+* Input constraint #2
+i 1 ~x1             1 ~x4            >= 1 ;
+* Input constraint #3
+i             1 ~x3       1  x5      >= 1 ;
+* Input constraint #4
+i             1 ~x3       1 ~x5      >= 1 ;
+* Input constraint #5: Contradict our proposed target constraint
+i 2  x1 1  x2 1  x3 >= 3 ;
+**** Counterfactual reasoning.  Target is constraint #6
+k 2 ~x1 1 ~x2 1 ~x3 >= 2 ;
+** Perform unit propagations.  Can use -6 as hint
+* Constraint #7
+A 1  x1 >= 1 ; -6
+* Constraint #8
+A 1 ~x4 >= 1 ; 2 7
+* Constraint #9
+A 1 ~x2 >= 1 ; 1 8
+* Constraint #10 (reuse negated target)
+A 1  x3 >= 1 ; -6 9
+* Constraint #11
+A 1  x5 >= 1 ; 3 10
+* Complete counterfactual reasoning by showing contradiction
+* Constraint #12
+A       >= 1 ; 4 11
+** From here on, can assume that constraint #6 is valid
+* Target constraint contradicts input constraint #5
+a                                     >= 1 ; 5 6
