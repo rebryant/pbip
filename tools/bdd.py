@@ -596,6 +596,65 @@ class Manager:
         self.cacheJustifyAdded += 1
         return (newNode, abs(justification))
 
+    # Return node + id of clause justifying that result ==> nodeA | NodeB
+    def applyOrJustify(self, nodeA, nodeB):
+        self.applyCount += 1
+        # Constant cases.
+        # No justifications required, since all return one of the arguments
+        if nodeA == self.leaf1 or nodeB == self.leaf1:
+            return (self.leaf1, resolver.tautologyId)
+        if nodeA == self.leaf0:
+            return (nodeB, resolver.tautologyId)
+        if nodeB == self.leaf0:
+            return (nodeA, resolver.tautologyId)
+        if nodeA == nodeB:
+            return (nodeA, resolver.tautologyId)
+
+        if nodeA.id > nodeB.id:
+            nodeA, nodeB = nodeB, nodeA
+        key = ("orj", nodeA.id, nodeB.id)
+        if key in self.operationCache:
+            return self.operationCache[key][:2]
+
+        # Mapping from rule names to clause numbers
+        hints = {}
+        # Mapping from variable names to variable numbers
+        splitVar = min(nodeA.variable, nodeB.variable)
+        highA = nodeA.branchHigh(splitVar)
+        lowA =  nodeA.branchLow(splitVar)
+        highB = nodeB.branchHigh(splitVar) 
+        lowB =  nodeB.branchLow(splitVar)
+
+        if highA != lowA:
+            hints["UHU"] = (nodeA.idHU(), resolver.cleanClause([-splitVar.id, nodeA.id, -highA.id]))
+            hints["ULU"] = (nodeA.idLU(), resolver.cleanClause([ splitVar.id, nodeA.id, -lowA.id]))
+        if highB != lowB:
+            hints["VHU"] = (nodeB.idHU(), resolver.cleanClause([-splitVar.id, nodeB.id, -highB.id]))
+            hints["VLU"] = (nodeB.idLU(), resolver.cleanClause([ splitVar.id, nodeB.id, -lowB.id]))
+
+        (newHigh, orHigh) = self.applyOrJustify(highA, highB)
+        hints["ORH"] = orHigh
+            
+        (newLow, orLow) = self.applyOrJustify(lowA, lowB)
+        hints["ORL"] = orLow
+
+        if newHigh == newLow:
+            newNode = newHigh
+        else:
+            newNode = self.findOrMake(splitVar, newHigh, newLow)
+            hints["WHD"] = (newNode.idHD(), resolver.cleanClause([-splitVar.id, -newNode.id, newHigh.id]))
+            hints["WLD"] = (newNode.idLD(), resolver.cleanClause([ splitVar.id, -newNode.id, newLow.id]))
+
+        targetClause = resolver.cleanClause([-newNode.id, nodeA.id, nodeB.id])
+        if targetClause == resolver.tautologyId:
+            justification, clauseList = resolver.tautologyId, []
+        else:
+            comment = "Justification that %s ==> %s | %s" % (newNode.label(), nodeA.label(), nodeB.label())
+            justification, clauseList = self.orResolver.run(targetClause, hints, comment)
+        self.operationCache[key] = (newNode, justification,clauseList)
+        self.cacheJustifyAdded += 1
+        return (newNode, justification)
+
     def applyNot(self, node):
         # Constant case
         if node == self.leaf1:
