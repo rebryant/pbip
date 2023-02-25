@@ -1090,6 +1090,13 @@ class Constraint:
         cval = 0
         return self.spawn(nnz, cval, csys, [self, other])
 
+    # Return new constraint that is logical negation of constraint
+    def negate(self):
+        nc = self.constraint(self.N, 1-self.cval)
+        for i in self.nz.keys:
+            nc.setitem(i, -self.nz[i])
+        return nc
+
     def isAlo(self):
         if self.cval != 1:
             return False
@@ -1107,6 +1114,7 @@ class Constraint:
                 return False
             break
         return True
+
 
 
     # Generate BDD representation

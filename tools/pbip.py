@@ -175,7 +175,17 @@ class PbipReader:
             print("PBIP:   Hints: %s" % str(hlist))
         return (command, clist, hlist, comlist)
 
- 
+class StepType:
+    input, assertion, oldCF, currentCF, currentTarget = range(5)
+
+    def implicationOK(self, st):
+        return st in [self.input, self.assertion]
+
+    def cfImplicationOK(self, st):
+        return st in [self.input, self.assertion, self.currentCF]
+
+    def cfNegativeImplicationOk(self, st):
+        return st == self.currentTarget
         
 
 class Pbip:
@@ -192,6 +202,11 @@ class Pbip:
     # Trusted BDD representations of constraints
     # Each TBDD is pair (root, validation)
     tbddList = []
+    # Each constraint carries a type that determines how it can be used as a hint
+    stepTypeList = []
+    # Verifier can work in either implication or counterfactual mode
+    counterfactualMode = False
+
     # Enable use as constraint system
     prover = None
     manager = None
@@ -207,6 +222,8 @@ class Pbip:
         self.cset = pseudoboolean.ConstraintSet()
         self.constraintList = []
         self.tbddList = []
+        self.stepTypeList = []
+        self.counterfactualMode = False
         lratName = None if lratName == "" else lratName
         self.prover = solver.Prover(fname=lratName, writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = True)
         # Print input clauses
@@ -231,13 +248,36 @@ class Pbip:
         command, clist, hlist, comlist = self.preader.readLine()
         if command == '':
             return True
-        for con in clist:
-            con.buildBdd(self)
-        self.constraintList.append(clist)
-        if len(clist) == 2:
-            nroot = self.manager.applyAnd(clist[0].root, clist[1].root)
+        st = None
+        nclist = clist
+        negated = False
+        if command in ['a', 'i']:
+            if self.counterfactualMode:
+                raise PbipException("", "Can't have command of type '%s' while in counterfactual mode" % command)
+            for con in clist:
+                con.buildBdd(self)
+            st = StepType.assertion if command == 'a' else StepType.input
+        elif command == 'z':
+            if self.counterfactualMode:
+                raise PbipException("", "Can't have command of type '%s' while already in counterfactual mode" % command)
+            for con in clist:
+                con.buildBdd(self)
+            st = StepType.target
+            self.counterFactualMode = True
+        elif command == 'A':
+            if not self.counterfactualMode:
+                raise PbipException("", "Can't have command of type '%s' when in implication mode" % command)
+            nclist = [con.negate() for con in clist]
+            for ncon in nclist:
+                ncon.buildBdd(self)
+            negated = True
+            st = StepType.currentCF
+        self.constraintList.append(nclist)
+        self.stepTypeList.append(st)
+        if len(nclist) == 2:
+            nroot = self.manager.applyOr(nclist[0].root, nclist[1].root) if negated else self.manager.applyAnd(nclist[0].root, nclist[1].root)
         else:
-            nroot = clist[0].root
+            nroot = nclist[0].root
         self.tbddList.append((nroot,None))
         pid = len(self.constraintList)
         for com in comlist:
@@ -246,6 +286,10 @@ class Pbip:
             self.doInput(pid, hlist)
         elif command == 'a':
             self.doAssertion(pid, hlist)
+        elif command == 'z':
+            self.doTarget(pid, hlist)
+        elif command == 'A':
+            self.doCfAssertion(pid, hlist)
         else:
             raise PbipException("", "Unexpected command '%s'" % command)
         return False
