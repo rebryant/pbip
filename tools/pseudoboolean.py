@@ -1092,9 +1092,9 @@ class Constraint:
 
     # Return new constraint that is logical negation of constraint
     def negate(self):
-        nc = self.constraint(self.N, 1-self.cval)
-        for i in self.nz.keys:
-            nc.setitem(i, -self.nz[i])
+        nc = Constraint(self.N, 1-self.cval)
+        for i in self.nz.keys():
+            nc[i] = -self.nz[i]
         return nc
 
     def isAlo(self):

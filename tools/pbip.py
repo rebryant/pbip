@@ -208,7 +208,7 @@ class Pbip:
     # Verifier can work in either implication or counterfactual mode
     counterfactualMode = False
     # When in counterfactual mode, keep track of target root
-    targetRoot = None
+    targetId = None
 
     # Enable use as constraint system
     prover = None
@@ -227,7 +227,7 @@ class Pbip:
         self.tbddList = []
         self.stepTypeList = []
         self.counterfactualMode = False
-        self.targetRoot = None
+        self.targetId = None
         lratName = None if lratName == "" else lratName
         self.prover = solver.Prover(fname=lratName, writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = True)
         # Print input clauses
@@ -289,7 +289,7 @@ class Pbip:
             self.doInput(pid, hlist)
         elif command == 'a':
             self.doAssertion(pid, hlist)
-        elif command == 'z':
+        elif command == 'k':
             self.doTarget(pid, hlist)
         elif command == 'A':
             self.doCfAssertion(pid, hlist)
@@ -467,14 +467,16 @@ class Pbip:
                 self.prover.comment("Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
 
     def doTarget(self, pid, hlist):
-        if self.verbLevel >= 2:
-            self.prover.comment("Processing PBIP target declaration #%d" % pid)
-        if len(hints) > 0:
+        if len(hlist) > 0:
             print("PBIP ERROR: Step #%d.  Cannot have hints with target declaration" % (pid))
-        # Validation is tautology
-        self.counterFactualMode = True
-        self.targetRoot = self.tbddList[pid-1][0]
-        self.tbddList[pid-1][1] = resolver.tautologyId
+        self.counterfactualMode = True
+        self.targetId = pid
+        # Temporary validation is tautology
+        root = self.tbddList[pid-1][0]
+        self.tbddList[pid-1] = (root, resolver.tautologyId)
+        if self.verbLevel >= 2:
+            self.prover.comment("PBIP: Processed PBIP target declaration #%d.  Root %s" % (pid, root.label()))
+            print("PBIP: Processed PBIP target declaration #%d.  Root %s" % (pid, root.label()))
 
     def doCfAssertion(self, pid, hlist):
         # Mark which hints are implications and which are counterfactual
@@ -496,7 +498,7 @@ class Pbip:
                         hok = False
                     else:
                         ht = self.stepTypeList[hid-1]
-                        if ht != self.stepType().currentTarget:
+                        if ht != StepType().currentTarget:
                             print("PBIP ERROR: Step #%d.  Negated hint -%d must be for current target" % (pid, hid))
                             hok = False
                     isImplication.append(False)
@@ -508,7 +510,7 @@ class Pbip:
                     if not StepType().cfImplicationOK(ht):
                         print("PBIP ERROR: Step #%d.  Hint %d cannot be used for counterfactual-mode assertion" % (pid, hid))
                         hok = False
-                    isImplication.append(stepType().implicationOK(ht))
+                    isImplication.append(StepType().implicationOK(ht))
         if not hok:
             self.valid = False
         elif len(hlist) == 1:
@@ -516,7 +518,7 @@ class Pbip:
                 print("PBIP ERROR: Step #%d.  Cannot have implication assertion %d as only hint for counterfactual assertion" % (pid, hlist[0]))
                 self.valid = False
             else:
-                (r1,v1) = self.tbddList[hlist[0]-1]
+                (r1,v1) = self.tbddList[abs(hlist[0])-1]
                 (ok, implication) = self.manager.justifyImply(root, r1)
                 if not ok:
                     print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
@@ -524,8 +526,8 @@ class Pbip:
                 else:
                     antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
         else:
-            (r1,v1) = self.tbddList[hlist[0]-1]
-            (r2,v2) = self.tbddList[hlist[1]-1]
+            (r1,v1) = self.tbddList[abs(hlist[0])-1]
+            (r2,v2) = self.tbddList[abs(hlist[1])-1]
             if isImplication[0]:
                 if isImplication[1]:
                     print("PBIP ERROR.  Step #%d.  Cannot have both hints be implication assertions" % pid)
@@ -533,7 +535,7 @@ class Pbip:
                 else:
                     (ok, implication) = self.manager.applyAndJustifyImply(r1, root, r2)
                     if not ok:
-                        print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
+                        print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d (implication) and #%d (counterfactual)" % (pid, hlist[0], hlist[1]))
                         self.valid = False
                     else:
                         antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
@@ -541,19 +543,19 @@ class Pbip:
                 if isImplication[1]:
                     (ok, implication) = self.manager.applyAndJustifyImply(r2, root, r1)
                     if not ok:
-                        print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
+                        print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d (counterfactual) and #%d (implication)" % (pid, hlist[0], hlist[1]))
                         self.valid = False
                     else:
                         antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
                 else:
-                    (orRoot, orImplication) = self.manager.applyOr(r1, r2)
+                    (orRoot, orImplication) = self.manager.applyOrJustify(r1, r2)
                     if orImplication is None:
                         orImplication = resolver.tautologyId
                         implication = resolver.tautologyId
                     else:
                         (ok, implication) = self.manager.justifyImply(root, orRoot)
                         if not ok:
-                            print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
+                            print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d (counterfactual) and #%d (counterfactual)" % (pid, hlist[0], hlist[1]))
                             self.valid = False
                         else:
                             antecedents = [cid for cid in [v1, v2, orImplication, implication] if cid != resolver.tautologyId]
@@ -561,29 +563,31 @@ class Pbip:
         if not self.valid:
             return
         comment = "Justification of counterfactual assertion #%d" % pid
-        cid = self.prover.createClause([-root.id, self.targetRoot.id], antecedents, comment)
+        targetRoot = self.tbddList[self.targetId-1][0]
+        if root == self.manager.leaf1:
+            pclause = [targetRoot.id]
+        else:
+            pclause = [-root.id, targetRoot.id]
+        cid = self.prover.createClause(pclause, antecedents, comment)
         self.tbddList[pid-1] = (root, cid)
         if self.verbLevel >= 2:
-            if root.id == resolver.tautologyId:
-                print("PBIP: Processed PBIP counterfactual assertion #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
-                self.prover.comment("Processed PBIP counterfactual assertion #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
+            if root == self.manager.leaf1:
+                print("PBIP: Processed PBIP counterfactual assertion #%d.  Completed proof by contradiction" % pid)
+                self.prover.comment("Processed PBIP counterfactual assertion #%d.  Completed proof by contradiction" % pid)
             else:
-                print("PBIP: Processed PBIP counterfactual assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
-                self.prover.comment("Processed PBIP counterfactual assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
-        if root.id == resolver.tautologyId:
+                print("PBIP: Processed PBIP counterfactual assertion #%d.  Root %s Implication #%d [-%d %d]" % (pid, root.label(), cid, root.id, targetRoot.id))
+                self.prover.comment("Processed PBIP counterfactual assertion #%d.  Root %s Implication #%d [-%d %d]" % (pid, root.label(), cid, root.id, targetRoot.id))
+        if root == self.manager.leaf1:
             # Counterfactual proof completed.
-            self.counterfactualMode = False
-            self.targetRoot = None
+            # Relabel step types
             rpid = pid
-            while rpid > 0 and self.stepTypeList[rpid-1] != StepType().currentTarget:
-                self.stepTypeList[rpid-1] = StepType().oldCf
+            while rpid > self.targetId:
+                self.stepTypeList[rpid-1] = StepType().oldCF
                 rpid -= 1
-            if rpid == 0:
-                printf("PBIP ERROR.  Couldn't find current counterfactual reasoning target")
-                self.valid = False
-            else:
-                self.stepTypeList[rpid-1] = StepType().assertion
-            
+            self.stepTypeList[self.targetId-1] = StepType().assertion
+            self.tbddList[self.targetId-1] = (targetRoot, cid)
+            self.targetId = None
+            self.counterfactualMode = False
             
     def run(self):
         while not self.doStep():

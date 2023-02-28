@@ -124,9 +124,6 @@ class PbipWriter(Writer):
     def doInput(self, opbstring, hints):
         self.doCommand('i', opbstring, hints)
 
-    def doAssert(self, opbstring, hints):
-        self.doCommand('a', opbstring, hints)
-
 class CnfGenerator:
     verbLevel = 1
     cwriter = None

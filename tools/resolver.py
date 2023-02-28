@@ -92,8 +92,8 @@ class ResolveException(Exception):
 
 class VResolver:
     prover = None
-    clauseHighNames = ["WHU", "UHD", "VHD", "OPH"]
-    clauseLowNames = ["WLU", "ULD", "VLD", "OPL"]
+    clauseHighNames = ["WHU", "UHD", "VHD", "WHD", "UHU", "VHU", "OPH"]
+    clauseLowNames = ["WLU", "ULD", "VLD", "WLD", "ULU", "VLU", "OPL"]
     clauseHighKey = "OPH"
     clauseLowKey = "OPL"
     antecedentCount = 0

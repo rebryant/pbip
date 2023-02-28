@@ -613,8 +613,9 @@ class Manager:
         if nodeA.id > nodeB.id:
             nodeA, nodeB = nodeB, nodeA
         key = ("orj", nodeA.id, nodeB.id)
-        if key in self.operationCache:
-            return self.operationCache[key][:2]
+        lookup = self.operationRetrieve(key)
+        if lookup is not None:
+            return lookup
 
         # Mapping from rule names to clause numbers
         hints = {}
@@ -633,10 +634,10 @@ class Manager:
             hints["VLU"] = (nodeB.idLU(), resolver.cleanClause([ splitVar.id, nodeB.id, -lowB.id]))
 
         (newHigh, orHigh) = self.applyOrJustify(highA, highB)
-        hints["ORH"] = orHigh
+        hints["OPH"] = (orHigh, resolver.cleanClause([highA.id, highB.id, -newHigh.id]))
             
         (newLow, orLow) = self.applyOrJustify(lowA, lowB)
-        hints["ORL"] = orLow
+        hints["OPL"] = (orLow, resolver.cleanClause([lowA.id, lowB.id, -newLow.id]))
 
         if newHigh == newLow:
             newNode = newHigh
@@ -647,11 +648,11 @@ class Manager:
 
         targetClause = resolver.cleanClause([-newNode.id, nodeA.id, nodeB.id])
         if targetClause == resolver.tautologyId:
-            justification, clauseList = resolver.tautologyId, []
+            justification = resolver.tautologyId
         else:
             comment = "Justification that %s ==> %s | %s" % (newNode.label(), nodeA.label(), nodeB.label())
-            justification, clauseList = self.orResolver.run(targetClause, hints, comment)
-        self.operationCache[key] = (newNode, justification,clauseList)
+            justification = self.vresolver.run(targetClause, splitVar.id, hints, comment)
+        self.operationCache[key] = (newNode, justification)
         self.cacheJustifyAdded += 1
         return (newNode, justification)
 
