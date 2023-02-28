@@ -1,0 +1,32 @@
+*** Example use of counterfactual reasoning to validate proof
+* Input constraint #1
+i       1 ~x2       1  x4            >= 1 ;
+* Input constraint #2
+i 1 ~x1             1 ~x4            >= 1 ;
+* Input constraint #3
+i             1 ~x3       1  x5      >= 1 ;
+* Input constraint #4
+i             1 ~x3       1 ~x5      >= 1 ;
+* Input constraint #5: Contradict our proposed target constraint
+i 2  x1 1  x2 1  x3 >= 3 ;
+**** Counterfactual reasoning.  Introduce target constraint as constraint #6
+k 2 ~x1 1 ~x2 1 ~x3 >= 2 ;
+** Perform unit propagations.  Can use -6 as hint
+* Constraint #7
+A 1  x1 >= 1 ; -6
+* Constraint #8
+A 1 ~x4 >= 1 ; 2 7
+* Constraint #9
+A 1 ~x2 >= 1 ; 1 8
+* Constraint #10 (reuse negated target)
+A 1  x3 >= 1 ; -6 9
+* Constraint #11
+A 1  x3 1  x5 >= 2 ; 3 10
+* Complete counterfactual reasoning by showing contradiction
+* Constraint #12
+A       >= 1 ; 4 11
+** From here on, can assume that constraint #6 is valid
+* Target constraint contradicts input constraint #5
+a                                     >= 1 ; 5 6
+
+
