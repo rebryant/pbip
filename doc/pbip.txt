@@ -35,10 +35,10 @@ counterfactual reasoning sequence.
 
 When in counterfactual mode, each derived constraint must follow by
 implication from one or two of the preceding constraints.  An
-antecedent can be any constraint that qualifies as an antecedent
-while in implication mode, as well as: the negation of the target
-constraint or a derived constraint from the same counterfactual
-sequence.
+antecedent can be any constraint that qualifies as an antecedent while
+in implication mode, as well as: the negation of the target constraint
+or a derived constraint from the same counterfactual sequence.  At
+least one of the antecedents must be of these latter two types.
 
 PBIP files build on the OPB format for describing PB constraint
 problems, as documented in:
