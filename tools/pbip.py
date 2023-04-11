@@ -255,9 +255,18 @@ class Pbip:
         st = None
         nclist = clist
         negated = False
+
+        # Little hack.  Dynamically change command from 'A' to 'a' if all hints are acceptable as implication mode hints
+        if command == 'A' and self.assertionHintsOk(hlist):
+            command = 'a'
+            if (self.verbLevel >= 1):
+                pid = len(self.constraintList) + 1
+                print("WARNING: Converting command type of #%d from 'A' to 'a'" % pid)
+
         if command in ['a', 'i']:
-            if self.counterfactualMode:
-                raise PbipException("", "Can't have command of type '%s' while in counterfactual mode" % command)
+## NEW: Allow implication assertions in CF mode
+#            if self.counterfactualMode:
+#                raise PbipException("", "Can't have command of type '%s' while in counterfactual mode" % command)
             for con in clist:
                 con.buildBdd(self)
             st = StepType.assertion if command == 'a' else StepType.input
@@ -283,19 +292,22 @@ class Pbip:
             nroot = nclist[0].root
         self.tbddList.append((nroot,None))
         pid = len(self.constraintList)
+        done = False
         for com in comlist:
             self.prover.comment(com)
         if command == 'i':
             self.doInput(pid, hlist)
+            done = nroot == self.manager.leaf0
         elif command == 'a':
             self.doAssertion(pid, hlist)
+            done = nroot == self.manager.leaf0
         elif command == 'k':
             self.doTarget(pid, hlist)
         elif command == 'A':
             self.doCfAssertion(pid, hlist)
         else:
             raise PbipException("", "Unexpected command '%s'" % command)
-        return False
+        return done
         
     def placeInBucket(self, buckets, root, validation):
         supportIds = self.manager.getSupportIds(root)
@@ -417,6 +429,15 @@ class Pbip:
                 self.prover.comment("Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
 
       
+    def assertionHintsOk(self, hlist):
+        for hid in hlist:
+            if hid < 1 or hid > len(self.tbddList):
+                return False
+            ht = self.stepTypeList[hid-1]
+            if not StepType().implicationOK(ht):
+                return False
+        return True
+
 
     def doAssertion(self, pid, hlist):
         root = self.tbddList[pid-1][0]
@@ -597,8 +618,8 @@ class Pbip:
             print("PBIP INVALID")
             decided = True
         elif len(self.constraintList) > 0:
-            lastCon = self.constraintList[-1][-1]
-            if lastCon.isInfeasible():
+            lastBdd = self.tbddList[-1][0] if len(self.tbddList) > 0 else self.manager.leaf1
+            if lastBdd == self.manager.leaf0:
                 decided = True
                 print("PBIP UNSAT")
         if not decided:
