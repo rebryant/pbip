@@ -264,9 +264,6 @@ class Pbip:
                 print("WARNING: Converting command type of #%d from 'A' to 'a'" % pid)
 
         if command in ['a', 'i']:
-## NEW: Allow implication assertions in CF mode
-#            if self.counterfactualMode:
-#                raise PbipException("", "Can't have command of type '%s' while in counterfactual mode" % command)
             for con in clist:
                 con.buildBdd(self)
             st = StepType.assertion if command == 'a' else StepType.input
