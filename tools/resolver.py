@@ -186,14 +186,13 @@ class VResolver:
                 raise ResolveException("Couldn't prove final target: %s using candidates %s" % (str(targ), str(clist)))
             else:
                 id = self.generateProofStep(targ, alist, None)
-                return -id
+                return id
     
     def generateProofStep(self, target, antecedents, comment):
         self.prover.proofCount += 1
         self.antecedentCount += len(antecedents)
         self.clauseCount += 1
         return self.prover.createClause(target, antecedents, comment, isInput = False)
-
 
     def summarize(self):
         if self.prover.verbLevel >= 1 and self.runCount > 0:
