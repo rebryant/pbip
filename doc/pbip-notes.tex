@@ -45,9 +45,11 @@
 \newcommand{\restrict}[2]{#1|_{#2}}
 \newcommand{\trust}[1]{\dot {#1}}
 \newcommand{\assign}{\rho}
+\newcommand{\simplify}[2]{#1|_{#2}}
 \newcommand{\nassign}{\obar{\assign}}
 \newcommand{\indices}{I}
-\newcommand{\uprop}[1]{\beta[#1]}
+\newcommand{\unit}{\mathit{Unit}}
+\newcommand{\uprop}{\mathit{Uprop}}
 \newcommand{\imply}{\Rightarrow}
 
 
@@ -130,21 +132,21 @@ DRAT proof system.
 This section gives brief definitions of pseudo-Boolean constraints and their properties.
 A more extensive introduction is provided by Gocht in his PhD thesis [Gocht-Phd-2022].
 
-Consider a set of Boolean variables $X = \{ x_1, x_2, \ldots, x_n \}$.  For $x_i \in X$, {\em literal}
-$\lit_i$ can denote either $x_i$ or its negation, written $\obar{x}_i$.  We
-write $\obar{\lit}_i$ to denote $\obar{x}_i$ when $\lit_i = x_i$ and $x_i$ when
-$\lit_i = \obar{x}_i$.
+Consider a set of Boolean variables $X$.  For $x \in X$, {\em literal}
+$\lit$ can denote either $x$ or its negation, written $\obar{x}$.  We
+write $\obar{\lit}$ to denote $\obar{x}$ when $\lit = x$ and $x_i$ when
+$\lit = \obar{x}$.
 
 A {\em pseudo-Boolean constraint} is a linear expression, viewing
 Boolean variables as ranging over integer values $0$ and $1$.  That
-is, for a set of indices $\indices_C \subseteq \{ 1, 2, \ldots, n \}$,
+is, 
 a constraint $C$ has the form
 \begin{eqnarray}
-\sum_{i \in \indices_C } a_i \lit_i & \# & b \label{eqn:pbconstraint}
+\sum_{1 \leq i \leq n} a_i \lit_i & \# & b \label{eqn:pbconstraint}
 \end{eqnarray}
 where: 1) the relational operator $\#$ is $<$, $\leq$, $=$, $\geq$, or
 $>$, and 2) the coefficients $a_i$, as well as the constant $b$, are
-integers, with the coefficients being nonzero.
+integers.
 Constraints with relational operator $=$ are referred to as {\em equational constraints},
 while others are referred to as {\em ordering constraints}.
 
@@ -179,8 +181,9 @@ intact, to avoid replacing it by two ordering constraints.
 
 
 We consider two {\em normalized forms} for ordering constraints: A
-{\em coefficient-normalized} constraint has only positive
-coefficients.  A {\em variable-normalized} constraint has only
+{\em coefficient-normalized} constraint has only nonnegative
+coefficients.  By convention, we require with this form that literal $\lit_i = x_i$ for any $i$ such that $a_i = 0$.
+A {\em variable-normalized} constraint has only
 positive literals.  Converting between the two forms is
 straightforward using the identity $\obar{x}_i = 1-x_i$.  In reasoning
 about PB constraints, the two forms can be used interchangeably.
@@ -190,13 +193,13 @@ variable-normalized form is more convenient when viewing a constraint
 as an arithmetic expression.  In this document, we focus on the logical
 aspects, giving the general form of constraint $C$ as
 \begin{eqnarray}
-\sum_{i \in \indices_C} a_{i} \lit_{i} & \geq & b \label{eqn:coeff-normalized}
+\sum_{1 \leq i \leq n} a_{i} \lit_{i} & \geq & b \label{eqn:coeff-normalized}
 \end{eqnarray}
-with each $a_{i} > 0$.
+with each $a_{i} \geq 0$, and with $\lit_{i} = x_i$ whenever $a_i = 0$.
 
 Ordering constraint $C$ in coefficient-normalized form is trivial if and only
 if $b \leq 0$.  Similarly, $C$ is infeasible if and only if
-$b > \sum_{i \in \indices_C} {a_{i}}$.  By contrast, testing feasiblilty or triviality
+$b > \sum_{1 \leq i \leq n} {a_{i}}$.  By contrast, testing feasibility or triviality
 of an equational constraint is not straightforward, in that an instance of the
 subset sum problem [Garey] can be directly encoded as an equational
 constraint.
@@ -206,42 +209,58 @@ for some $X' \subseteq X$.  The assignment is {\em total} when $X' =
 X$ and {\em partial} when $X' \subset X$.  Assignment $\assign$ can
 also be viewed as a set of literals, where $x_i \in \assign$ when
 $\assign(x_i) = 1$ and $\obar{x}_i \in \assign$ when $\assign(x_i) = 0$.
-Finally, assignment $\assign$ can be viewed as the
-pseudo-Boolean constraint $\sum_{\lit_i \in \assign} \lit_i \;\geq\;| \assign |$.
-We use these three views interchangeably.  Note also for
-assignments $\assign_1$ and $\assign_2$ over disjoint sets of
-variables $X_1$ and $X_2$, their union is logically equivalent to
-their conjunction: $\func{\assign_1 \cup \assign_2} = \func{\assign_1}
-\land \func{\assign_2}$.
+A total assignment 
 
-We shall make use of constraints representing the negations of
-assignments.  That is, the negation of assignment $\assign$, written
-$\nassign$ will is the constraint:
-$\sum_{\lit_i \in \assign} \obar{\lit}_i \;\geq\; 1$.
-Logically, this is equivalent to a clause in a CNF
-representation.
+Some nomenclature regarding constraints of the form of
+(\ref{eqn:coeff-normalized}) will prove useful.  The {\em constraint
+  literals} are those literals $\lit_i$ such that $a_i \not = 0$.  A
+{\em cardinality constraint} has $a_i \in \{0,1\}$ for $1 \leq i \leq
+n$.  A cardinality constraint with $b=1$ is referred to as a {\em
+  clause}: at least one of the constraint literals must be assigned 1
+to satisfy the constraint.  A cardinality constraint with $\sum_{1\leq
+  i\leq n} a_i = b$ is referred to as a {\em conjunction}: all of the
+constraint literals must be assigned $1$ to satisfy the constraint.
+Observe that any assignment $\assign$ can be viewed as a conjunction,
+having coefficient $a_i = 1$ for each $\lit_i \in \assign$.  A
+conjunction with for which $a_i = 1$ for just a single value of $i$ is
+referred to as a {\em unit} constraint: it is satisfied if and only if
+literal $\lit_i$ is assigned $1$.
 
 
+%% Note that for
+%% assignments $\assign_1$ and $\assign_2$ over disjoint sets of
+%% variables $X_1$ and $X_2$, their union is logically equivalent to
+%% their conjunction: $\func{\assign_1 \cup \assign_2} = \func{\assign_1}
+%% \land \func{\assign_2}$.
 
-We let $\assign(C)$ denote the constraint resulting when $C$ is
+%% We shall make use of constraints representing the negations of
+%% assignments.  That is, the negation of assignment $\assign$, written
+%% $\nassign$, is the clause:
+%% $\sum_{\lit_i \in \assign} \obar{\lit}_i \;\geq\; 1$.
+
+We let $\simplify{C}{\assign}$ denote the constraint resulting when $C$ is
 simplified according assignment $\assign$.  That is, assume $\assign$ is defined over a set of variables $X'$ and
-partition the indices $i \in \indices_C$ into
+partition the indices $i$ for $1 \leq i \leq n$ into
 three sets:
 $I^{+}$, consisting of those indices $i$ such that $\lit_{i} \in \assign$,
 $I^{-}$, consisting of those indices $i$ such that $\obar{\lit}_{i} \in \assign$,
 and $I^{X}$ consisting of those indices $i$ such that $x_i \not \in X'$.
-With this, $\assign(C)$ can be written
-\begin{eqnarray}
-\sum_{i \in I^{X}} a_{i} \lit_{i} & \geq & b - \sum_{i \in I^{+}} a_{i} \label{eqn:assigned}
-\end{eqnarray}
+With this, $\simplify{C}{\assign}$ can be written as $\sum_{1 \leq i \leq n} a'_i \; \geq \; b'$
+with $a'_i$ equal to $a_i$ for $i \in I^{X}$ and equal to $0$ otherwise, and with $b' = b - \sum_{i\in I^{+}} a_i$.
 
-We will find cases where we want to condition a constraint $C$ based
-on a partial assignment $\assign$, expressing the constraint $\assign
-\imply C$.  In particular, if constraint $C$ is of the form
-(\ref{eqn:coeff-normalized}), then $\assign \imply C$ can be written as the PB constraint
-\begin{eqnarray}
-\sum_{\lit \in \assign} b\, \obar{\lit} \;\; + \;\;  \sum_{i \in \indices_C} a_{i} \lit_{i} & \geq & b \label{eqn:implication}
-\end{eqnarray}
+
+%% \begin{eqnarray}
+%% \sum_{i \in I^{X}} a_{i} \lit_{i} & \geq & b - \sum_{i \in I^{+}} a_{i} \label{eqn:assigned}
+%% \end{eqnarray}
+
+%% **** This looks fishy ****
+%% We will find cases where we want to condition a constraint $C$ based
+%% on a partial assignment $\assign$, expressing the constraint $\assign
+%% \imply C$.  In particular, if constraint $C$ is of the form
+%% (\ref{eqn:coeff-normalized}), then $\assign \imply C$ can be written as the PB constraint
+%% \begin{eqnarray}
+%% \sum_{\lit_i \in \assign} b\, \obar{\lit}_i \;\; + \;\;  \sum_{1 \leq i \leq n} a_{i} \lit_{i} & \geq & b \label{eqn:implication}
+%% \end{eqnarray}
 
 A pseudo-Boolean {\em formula} $F$ is a set of pseudo-Boolean
 constraints.  We say that $F$ is {\em satisfiable} when there is some
@@ -252,23 +271,54 @@ assignment $\assign$ that satisfies all of the constraints in $F$, and
 \section{Pseudo-Boolean Implication Proofs}
 
 A Pseudo-Boolean Implication Proof (PBIP) provides a systematic way to
-prove that a PB formula $F$ is unsatisfiable.  It consists of a sequence of ordering constraints
+prove that a PB formula $F$ is unsatisfiable.  It is given by a sequence of constraints, referred to as the {\em proof sequence}:
 \begin{displaymath}
   C_1, C_2, \ldots, C_m, C_{m+1}, \ldots, C_t
 \end{displaymath}  
-such that the first $m$ constraints are those of formula $F$, while the constraints $i$
-with $i > m$ are implied by either one or two of the preceding constraints.
-That is, for each step $i$ with $m < i \leq t$,
-there is a set $H_i \subseteq \{C_1, C_2, \ldots, C_{i-1} \}$ such that $|H_i| \leq 2$ and
+such that the first $m$ constraints are those of formula $F$, while each {\em added} constraint $C_i$
+for  $i > m$ follows by implication from the preceding constraints.
+That is, 
 \begin{eqnarray}
-\bigwedge_{C \in H_i} \func{C} & \imply & \func{C_i} \label{eqn:proofsequence}
+\bigwedge_{1 \leq j \leq i-1} \func{C_j} & \imply & \func{C_i} \label{eqn:proofsequence}
 \end{eqnarray}
-The proof completes with an infeasible constraint $C_t$.
+The proof completes with the addition of an infeasible constraint for $C_t$.
 By the transitivity of implication, we have therefore proved that $F$ is not satisfiable.
-We refer to the set $H_i$ as the {\em hints} for step $i$.
+
+Constraints $C_{i}$ with $i > m$, can be added in two different ways, corresponding to two different reasoning modes.
+\begin{enumerate}
+\item In {\em implication mode}, constraint $C_i$ follows by implication from at most two prior constraints in the  proof sequence.
+  That is, for some $H_i \subseteq \{C_1, C_2,
+  \ldots, C_{i-1}\}$ with $|H_i| \leq 2$ such that:
+\begin{eqnarray}
+\bigwedge_{C_j \in H_i} \func{C_j} & \imply & \func{C_i} \label{eqn:implicationmode}
+\end{eqnarray}
+Set $H_i$ is referred to as the {\em hint} for proof step $i$.
+\item In {\em counterfactual} mode, the new constraint is justified
+  via a proof by contradiction.  That is, $C_i$ is introduced as a
+  {\em target constraint} 
+and is followed by a sequence of {\em
+    counterfactual constraints} $D^{i}_1, D^{i}_2, \ldots, D^{i}_k$
+  that would hold if the target constraint were false.  (These constraints are not part of the proof sequence.) The final
+  constraint $D^{i}_k$ is infeasible, thus showing by contradiction
+  that the target constraint must hold.
+  Each step in the counterfactual
+  sequence must follow by implication from one or two constraints as a hint,
+  where the hint $H^{i}_j$ for $D^{i}_j$ can contain the following:
+  \begin{enumerate}
+  \item A constraint $C_{i'}$ from the proof sequence.
+  \item The negation of the target constraint $\obar{C}_i$
+  \item An earlier counterfactual constraint within the same sequence $D^{i}_{j'}$ with $j' < j$.
+  \end{enumerate}
+  At least one of the constraints in the hint must be from the latter two categories.
+  While in counterfactual mode, the proof can temporarily revert to
+  implication mode, adding a constraint $C_{i'}$ to the proof sequence
+  that follows by implication from at most two other constraints in the proof sequence.
+  Once the final counterfactual constraint $D^{i}_k$ is given, the proof reverts to implication mode, and constraint $C_i$ can be used
+  as the antecedent in subsequent proof steps.
+\end{enumerate}
 
 Unless ${\it P} = {\it NP}$, we cannot guarantee that a proof checker
-can validate even a single step of a PBIP proof in polynomial time.
+can validate even a single implication step of a PBIP proof in polynomial time.
 In particular, consider an equational constraint $C$ encoding an
 instance of the subset sum problem, and let $C_{\leq}$ and $C_{\geq}$
 denote its conversion into a pair of ordering constraints such that
@@ -291,85 +341,47 @@ $O(b^{2} \cdot n)$ when there is a single hint and $O(b^{3} \cdot n)$
 when there are two hints.  This complexity is polynomial in $b$, but
 it would be exponential in the size of a binary representation of $b$.
 
-
 \section{(Reverse) Unit Propagation}
 
 Consider constraint $C$ in coefficient-normalized form.  Literal
-$\lit$ is {\em unit propagated} by $C$ when the assignment $\assign = \{ \obar{\lit} \}$
-causes the constraint $\assign(C)$ to become infeasible.
-Observe that
-a single constraint can unit propagate multiple literals.  For
-example, $4 x_1 + 3 \obar{x}_2 + x_3 \geq 6$ unit propagates both
-$x_1$ and $\obar{x}_2$.  For constraint $C$, we let $\uprop{C}$
-denote the set of literals it unit propagates.  This set can also be
-viewed as a partial assignment, and therefore also a constraint,
-having the property that $\func{C} \imply \func{\uprop{C}}$.
-
+$\lit$ is {\em unit propagated} by $C$ when the assignment $\assign =
+\{ \obar{\lit} \}$ causes the constraint $\simplify{C}{\assign}$ to become
+infeasible.  As the name implies, a unit-propagated literal $\lit$ then becomes a unit constraint.
+Observe that a single constraint can unit propagate
+multiple literals.  For example, $4 x_1 + 3 \obar{x}_2 + x_3 \geq 6$
+unit propagates both $x_1$ and $\obar{x}_2$.
 For an ordering constraint $C$ in coefficent-normalized form
 (\ref{eqn:coeff-normalized}), detecting which literals unit propagate
-is straightforward.  Let $A = \sum_{i \in \indices_C} a_{i}$.  Then
+is straightforward.  Let $A = \sum_{1 \leq i \leq n} a_{i}$.  Then
 literal $\lit_{i}$ unit propagates if and only if $A - a_{i} < b$,
 i.e., $a_{i} > A - b$.  For example, the constraint $4 x_1 + 3
 \obar{x}_2 + x_3 \geq 6$ has $A = 7$ and $b=6$, yielding $A-b=1$.
 This justifies the unit propagations of both $x_1$ and $\obar{x}_2$.
-A {\em unit} constraint is of the form $\lit \geq 1$.  It unit propagates $\lit$.
 
-To perform unit propagation on constraint $C$ in the context of a
-partial assignment $\assign$, we can use (\ref{eqn:assigned}) to first
-generate the constraint representation of $\assign(C)$.
+For constraint $C$, we let $\unit(C)$ denote the set of literals it
+unit propagates.  Often, by simplifying a constraint $C$ according to
+a partial assignment $\assign$, the simplified constraint $\simplify{C}{\assign}$
+will unit propagate new literals, given by $\unit(\simplify{C}{\assign})$.  These
+literals can then be added to the partial assignment.  Formally,
+define the operation $\uprop$ as  $\uprop(\assign, C) = \assign \cup \unit(\simplify{C}{\assign})$.
+{\em Unit propagation} is then the process of
+repeatedly applying this operation to a set of clauses to expand the
+set of literals in a partial assignment.
 
 The {\em reverse unit propagation} (RUP) proof rule [Gocht-Phd-2022]
-uses unit propagation to prove that constraint $C$ can be added to
-formula $F$ while preserving its set of satisfying assignments.  It
-operates by finding a sequence of constraints $C_0, C_1, \ldots, C_k$,
-with $C_0 = \obar{C}$ and $C_i \in F$ for $1 \leq i \leq k$, and
-proving that this combination is unsatisfiable.  We assume at this
-point in the derivation that we have a partial assignment $\alpha$,
-consisting of the unit constraints that occurred as input constraints,
-as well as those that have been derived by prior RUP proofs.
-
-A successful RUP proof generates a sequence of assignments
-$\assign_0,\assign_1, \ldots, \assign_{k-1}$ starting with
-$\assign_0 = \alpha \cup \uprop{\alpha(C_0)}$.
-That is, it starts with the unit literals in $\alpha$ and uses these
-to simplify the negated target constraint. This can generate new unit
-literals, which are added to $\alpha$ to get the set $\assign_0$.
-This pattern of simplifying and generating more unit literals continues for
-$1 < i < k$ with $\assign_i = \assign_{i-1} \cup \uprop{\assign_{i-1}(C_i)}$.
-The final constraint $C_k$
-must then satisfy $\assign_{k-1}(C_k) = \nil$.
-
-Given a RUP proof step, we can generate a sequence of PBIP proof steps that concludes with the addition of constraint $C$.
-In particular, the final assignment in the RUP proof yielded the result $\func{\assign_{k-1}(C_k)} = \func{\assign_{k-1}} \land \func{C_k} \imply \nil$, and therefore
-$\func{C_k} \imply \func{\nassign_{k-1}}$.
-  Starting with $i = k$ and stepping downward to $i=1$, we can see
-$\func{\assign_i} = \func{\assign_{i-1}} \land \func{C_i}$, but the previous step added
-$\nassign_{i}$, and therefore we can add
-the constraint $\nassign_{i-1}$, with the preceding constraint plus constraint $C_i$ as hints.  Once we reach $i=1$, we have added the constraint $\nassign_0$,
-and we can therefore add constraint $\alpha \imply C$, a weakened version of the target constraint, with the preceding constraint as its hint.
-
-Summarizing, the PBIP proof steps will be as follows, leading to the
-addition of $\alpha \imply C$:
-\begin{center}
-\begin{tabular}{ll}
-\toprule
-  \makebox[3cm]{Added Constraint} & \makebox[2cm]{Hints} \\
-  \midrule
-  $\nassign_{k-1}$ & $C_k$  \\
-  $\nassign_{k-2}$ & $C_{k-1}$, $\nassign_{k-1}$ \\
-  $\cdots$ & $\cdots$ \\
-  $\nassign_{i}$ & $C_{i+1}$, $\nassign_{i+1}$ \\
-  $\cdots$ & $\cdots$ \\
-  $\nassign_{0}$ & $C_{1}$, $\nassign_{1}$ \\
-  $\alpha \imply C$ & $\nassign_{0}$  \\
-  \bottomrule
-\end{tabular}
-\end{center}
-To remove the antecedent condition $\alpha$, we then eliminate each literal
-$\lit \in \alpha$ in sequence, using the preceding constraint and the 
-the unit constraint $\lit \geq 1$ as hints.  As an optimization, we can restrict $\alpha$
-to those unit literals that were used in
-at least one unit propagation step during the RUP process.
+uses unit propagation to prove that constraint can be added to formula
+while preserving its set of satisfying assignments.  It closely
+parallels the counterfactual reasoning mode of PBIP, using unit
+propagation as the basic step for generating the counterfactual
+constraints.  When adding clause $C_i$, each constraint $D^i_j$
+in the counterfactual sequence represents the conjunction of a set of
+literals $\assign_j$.  Let $\assign_0$ denote the conjunction of all
+literals that have been derived as unit constraints previously.
+For each $j$ with $1 \leq j < k$,
+counterfactual assertion $\assign_j$ is derived either from some previous proof clause:
+$\assign_j = \uprop(\assign_{j-1}, C_j)$ for $j < i$, or from the negated target:
+$\assign_j = \uprop(\assign_{j-1}, \obar{C}_i)$.
+The final contradiction occurs when $\simplify{C_k}{\assign_{k-1}}$ is infeasible.
 
 \section{RUP Example}
 
@@ -385,31 +397,19 @@ $C_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $3 \obar{x}_3$ & $\geq 3$ \\
 \bottomrule
 \end{tabular}
 \end{center}
-Our goal is to add the constraint $C = 2 x_1 + x_2 + x_3 \geq 2$ via RUP using these constraints.  RUP proceeds as follows:
+Our goal is to add the constraint $C = 2 x_1 + x_2 + x_3 \geq 2$ via RUP using these constraints, without any prior unit constraints.
+RUP proceeds as follows:
 \begin{enumerate}
 \item
-We can see that $\obar{C} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_0 = \obar{x}_1 \geq 1$.
+We can see that $\obar{C} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_1 = \obar{x}_1 \geq 1$.
 \item
-With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_1 = \obar{x}_1 + x_2 \geq 2$.
+With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_2 = \obar{x}_1 + x_2 \geq 2$.
 \item
-  Constraint $C_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_2 = \obar{x}_1 + x_2 + x_3 \geq 3$.
+  Constraint $C_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_3 = \obar{x}_1 + x_2 + x_3 \geq 3$.
 \item
   Constraint $C_3$ simplifies to $ 0 \geq 3$, which is infeasible.
 \end{enumerate}
 
-This single application of RUP results in the following PBIP proof steps:
-\begin{center}
-  \begin{tabular}{cllllllll}
-\toprule    
-\makebox[1cm]{ID} & \multicolumn{6}{c}{Constraint} & \makebox[0.4cm]{} & \makebox[1cm]{Hints}\\
-\midrule
-$C_4$ & \makebox[0.6cm][l]{$x_1$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_2$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_3$} & \makebox[0.6cm][l]{$\geq 1$} && $C_3$ \\
-$C_5$ & $x_1$ & $+$ & $\obar{x}_2$ & & & $\geq 1$ && $C_2$, $C_4$ \\
-$C_6$ & $x_1$ &     &              & & & $\geq 1$ && $C_1$, $C_5$ \\
-$C$   & $2x_1$ & $+$ & $x_2$ & $+$ & $x_3$ & $\geq 2$ && $C_6$ \\
-\bottomrule
-\end{tabular}
-\end{center}
 
 
 
