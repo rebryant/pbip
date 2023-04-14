@@ -1037,23 +1037,23 @@ class Manager:
     # Summarize activity
     def summarize(self):
         if self.verbLevel >= 1:
-            self.writer.write("Input variables: %d\n" % self.variableCount)
+            self.writer.write("  Input variables: %d\n" % self.variableCount)
             if self.verbLevel >= 2:
-                self.writer.write("Variables quantified out: %d\n" % len(self.quantifiedVariableSet))
-            self.writer.write("Total nodes: %d\n" % self.nodeCount)
+                self.writer.write("  Variables quantified out: %d\n" % len(self.quantifiedVariableSet))
+            self.writer.write("  Total nodes: %d\n" % self.nodeCount)
             if self.verbLevel >= 2:
-                self.writer.write("Total nodes removed by gc: %d\n" % self.nodesRemoved)
-            self.writer.write("Maximum live nodes: %d\n" % self.maxLiveCount)
-            self.writer.write("Total apply operations: %d\n" % self.applyCount)            
+                self.writer.write("  Total nodes removed by gc: %d\n" % self.nodesRemoved)
+            self.writer.write("  Maximum live nodes: %d\n" % self.maxLiveCount)
+            self.writer.write("  Total apply operations: %d\n" % self.applyCount)            
             if self.verbLevel >= 2:
-                self.writer.write("Total cached results not requiring proofs: %d\n" % self.cacheNoJustifyAdded)
-                self.writer.write("Total cached results requiring proofs: %d\n" % self.cacheJustifyAdded)
-                self.writer.write("Total cache entries removed: %d\n" % self.cacheRemoved)
-            self.writer.write("Total GCs performed: %d\n" % self.gcCount)
+                self.writer.write("  Total cached results not requiring proofs: %d\n" % self.cacheNoJustifyAdded)
+                self.writer.write("  Total cached results requiring proofs: %d\n" % self.cacheJustifyAdded)
+                self.writer.write("  Total cache entries removed: %d\n" % self.cacheRemoved)
+            self.writer.write("  Total GCs performed: %d\n" % self.gcCount)
         if self.verbLevel >= 2:
-            self.writer.write("Results from resolver:\n")
+            self.writer.write("  Results from resolver:\n")
             self.vresolver.summarize()
         if self.verbLevel >= 1:
-            self.writer.write("Results from proof generation\n")
+            self.writer.write("  Results from proof generation\n")
             self.prover.summarize()
         

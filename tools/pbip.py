@@ -192,7 +192,6 @@ class Pbip:
     preader = None
     permuter = None
     # Set of constraints
-    cset = None
     # Array mapping from PBIP file constraints to cset constraints (offset by 1)
     # Each is a list containing Ids of 1 or 2 constraints
     constraintList = []
@@ -209,6 +208,8 @@ class Pbip:
     counterfactualMode = False
     # When in counterfactual mode, keep track of target root
     targetId = None
+    maxBddSize = 0
+    maxCoefficient = 0
 
     # Enable use as constraint system
     prover = None
@@ -222,7 +223,6 @@ class Pbip:
         self.valid = True
         self.creader = solver.CnfReader(cnfName, verbLevel)
         self.preader = PbipReader(pbipName, verbLevel)
-        self.cset = pseudoboolean.ConstraintSet()
         self.constraintList = []
         self.tbddList = []
         self.stepTypeList = []
@@ -247,9 +247,13 @@ class Pbip:
             self.litMap[-inputId] = e
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
+        self.maxBddSize = 0
+        self.maxCoefficient = 0
 
     def doStep(self):
         command, clist, hlist, comlist = self.preader.readLine()
+        for con in clist:
+            self.maxCoefficient = max(self.maxCoefficient, con.maxCoefficient())
         if command == '':
             return True
         st = None
@@ -288,6 +292,7 @@ class Pbip:
         else:
             nroot = nclist[0].root
         self.tbddList.append((nroot,None))
+        self.maxBddSize = max(self.maxBddSize, self.manager.getSize(nroot))
         pid = len(self.constraintList)
         done = False
         for com in comlist:
@@ -417,6 +422,7 @@ class Pbip:
             comment = "Justification of input constraint #%d" % pid
             cid = self.prover.createClause([root.id], antecedents, comment=comment)
         self.tbddList[pid-1] = (root, cid)
+        
         if self.verbLevel >= 2:
             if root.id == -resolver.tautologyId:
                 print("PBIP: Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Empty clause #%d" % (pid, broot.label(), root.label(), cid))
@@ -621,6 +627,9 @@ class Pbip:
                 print("PBIP UNSAT")
         if not decided:
             print("PBIP Final status unknown")
+        print("PBIP Results:")
+        print("  Maximum Coefficient = %d" % self.maxCoefficient)
+        print("  Maximum BDD size = %d" % self.maxBddSize)
+        print("BDD Results:")
         self.manager.summarize()
-
 

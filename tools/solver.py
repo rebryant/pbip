@@ -413,12 +413,13 @@ class Prover:
 
     def summarize(self):
         if self.verbLevel >= 1:
-            self.writer.write("Total Clauses: %d\n" % self.clauseCount)
-            self.writer.write("Input clauses: %d\n" % self.inputClauseCount)
+            self.writer.write("Proof Generator Results")
+            self.writer.write("  Total Clauses: %d\n" % self.clauseCount)
+            self.writer.write("  Input clauses: %d\n" % self.inputClauseCount)
             if self.verbLevel >= 2:
                 acount = self.clauseCount - self.inputClauseCount - self.proofCount
-                self.writer.write("Added clauses without antecedents: %d\n" % acount)
-                self.writer.write("Added clauses requiring proofs: %d\n" % (self.proofCount))
+                self.writer.write("  Added clauses without antecedents: %d\n" % acount)
+                self.writer.write("  Added clauses requiring proofs: %d\n" % (self.proofCount))
 
     def __del__(self):
         if self.opened:

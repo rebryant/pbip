@@ -1177,6 +1177,13 @@ class Constraint:
         self.root = nodes[ilist[0]][0]
         self.size = csys.manager.getSize(self.root)
     
+    # What is the largest coefficient absolute value
+    def maxCoefficient(self):
+        val = 0
+        for coeff in self.nz.values():
+            val = max(val, abs(coeff))
+        return val
+
     # Does this constraint have no solution
     def isInfeasible(self):
         maxsum = 0
