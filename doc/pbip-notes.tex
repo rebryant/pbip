@@ -130,7 +130,7 @@ This notes describes some ideas on converting unsatisfiability proofs
 for pseudo-Boolean (PB) constraints into clausal proofs based on the
 DRAT proof system.
 
-\section{Notation}
+\section{Background}
 
 This section gives brief definitions of pseudo-Boolean constraints and their properties.
 A more extensive introduction is provided by Gocht in his PhD thesis [Gocht-Phd-2022].
@@ -212,7 +212,6 @@ for some $X' \subseteq X$.  The assignment is {\em total} when $X' =
 X$ and {\em partial} when $X' \subset X$.  Assignment $\assign$ can
 also be viewed as a set of literals, where $x_i \in \assign$ when
 $\assign(x_i) = 1$ and $\obar{x}_i \in \assign$ when $\assign(x_i) = 0$.
-A total assignment 
 
 Some nomenclature regarding constraints of the form of
 (\ref{eqn:coeff-normalized}) will prove useful.  The {\em constraint
@@ -271,78 +270,6 @@ assignment $\assign$ that satisfies all of the constraints in $F$, and
 {\em unsatisfiable} otherwise.  
 
 
-\section{Pseudo-Boolean Implication Proofs}
-
-A Pseudo-Boolean Implication Proof (PBIP) provides a systematic way to
-prove that a PB formula $F$ is unsatisfiable.  It is given by a sequence of constraints, referred to as the {\em proof sequence}:
-\begin{displaymath}
-  C_1, C_2, \ldots, C_m, C_{m+1}, \ldots, C_t
-\end{displaymath}  
-such that the first $m$ constraints are those of formula $F$, while each {\em added} constraint $C_i$
-for  $i > m$ follows by implication from the preceding constraints.
-That is, 
-\begin{eqnarray}
-\bigwedge_{1 \leq j < i} \func{C_j} & \imply & \func{C_i} \label{eqn:proofsequence}
-\end{eqnarray}
-The proof completes with the addition of an infeasible constraint for $C_t$.
-By the transitivity of implication, we have therefore proved that $F$ is not satisfiable.
-
-Constraints $C_{i}$ with $i > m$, can be added in two different ways, corresponding to two different reasoning modes.
-\begin{enumerate}
-\item In {\em implication mode}, constraint $C_i$ follows by implication from at most two prior constraints in the  proof sequence.
-  That is, for some $H_i \subseteq \{C_1, C_2,
-  \ldots, C_{i-1}\}$ with $|H_i| \leq 2$ such that:
-\begin{eqnarray}
-\bigwedge_{C_j \in H_i} \func{C_j} & \imply & \func{C_i} \label{eqn:implicationmode}
-\end{eqnarray}
-Set $H_i$ is referred to as the {\em hint} for proof step $i$.
-\item In {\em counterfactual} mode, the new constraint is justified
-  via a proof by contradiction.  That is, $C_i$ is introduced as a
-  {\em target constraint} 
-and is followed by a sequence of {\em
-    counterfactual constraints} $D^{i}_1, D^{i}_2, \ldots, D^{i}_k$
-  that would hold if the target constraint were false.  (These constraints are not part of the proof sequence.) The final
-  constraint $D^{i}_k$ is infeasible, thus showing by contradiction
-  that the target constraint must hold.
-  Each step in the counterfactual
-  sequence must follow by implication from one or two constraints as a hint,
-  where the hint $H^{i}_j$ for $D^{i}_j$ can contain the following:
-  \begin{enumerate}
-  \item A constraint $C_{i'}$ from the proof sequence.
-  \item The negation of the target constraint $\obar{C}_i$
-  \item An earlier counterfactual constraint within the same sequence $D^{i}_{j'}$ with $j' < j$.
-  \end{enumerate}
-  At least one of the constraints in the hint must be from the latter two categories.
-  While in counterfactual mode, the proof can temporarily revert to
-  implication mode, adding a constraint $C_{i'}$ to the proof sequence
-  that follows by implication from at most two other constraints in the proof sequence.
-  Once the final counterfactual constraint $D^{i}_k$ is given, the proof reverts to implication mode, and constraint $C_i$ can be used
-  as the antecedent in subsequent proof steps.
-\end{enumerate}
-
-Unless ${\it P} = {\it NP}$, we cannot guarantee that a proof checker
-can validate even a single implication step of a PBIP proof in polynomial time.
-In particular, consider an equational constraint $C$ encoding an
-instance of the subset sum problem, and let $C_{\leq}$ and $C_{\geq}$
-denote its conversion into a pair of ordering constraints such that
-$\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.  Consider a PBIP
-proof step to add the constraint $\obar{C}_{\leq}$ having the 
-$C_{\geq}$ as the only hint.  Proving that
-$\func{C_{\geq}} \imply \func{\obar{C}_{\leq}}$, requires proving that
-$\func{C_{\leq}} \land \func{C_{\geq}} = \nil$, i.e., that $C$ is unsatisfiable.
-
-On the other hand, checking the correctness of a PBIP proof can be
-performed in {\em pseudo-polynomial} time, meaning that the complexity will
-be bounded by a polynomially sized formula over the numeric values of
-the integer parameters.  This can be done using binary decision
-diagrams [BBH-2022].  In particular, an ordering constraint over $n$ variables in
-coefficient-normalized form with constant $b$ will have a BDD
-representation with at most $b \cdot n$ nodes.  For proof step where
-the added constraints and the hints all have constants less than or equal
-to $b$, the number of BDD operations to validate the step will be
-$O(b^{2} \cdot n)$ when there is a single hint and $O(b^{3} \cdot n)$
-when there are two hints.  This complexity is polynomial in $b$, but
-it would be exponential in the size of a binary representation of $b$.
 
 \section{(Reverse) Unit Propagation}
 
@@ -371,22 +298,25 @@ define the operation $\uprop$ as  $\uprop(\assign, C) = \assign \cup \unit(\simp
 repeatedly applying this operation to a set of clauses to expand the
 set of literals in a partial assignment.
 
-The {\em reverse unit propagation} (RUP) proof rule [Gocht-Phd-2022]
-uses unit propagation to prove that constraint can be added to formula
-while preserving its set of satisfying assignments.  It closely
-parallels the counterfactual reasoning mode of PBIP, using unit
-propagation as the basic step for generating the counterfactual
-constraints.  When adding clause $C_i$, each constraint $D^i_j$
-in the counterfactual sequence represents the conjunction of a set of
-literals $\assign_j$.  Let $\assign_0$ denote the conjunction of all
-literals that have been derived as unit constraints previously.
-For each $j$ with $1 \leq j < k$,
-counterfactual assertion $\assign_j$ is derived either from some previous proof clause:
-$\assign_j = \uprop(\assign_{j-1}, C_j)$ for $j < i$, or from the negated target:
-$\assign_j = \uprop(\assign_{j-1}, \obar{C}_i)$.
-The final contradiction occurs when $\simplify{C_k}{\assign_{k-1}}$ is infeasible.
+Consider a formula $F$ consisting of a set of constraints $C_1, C_2,
+\ldots, C_m$.  The {\em reverse unit propagation} (RUP) proof rule
+      [Gocht-Phd-2022] uses unit propagation to prove that
+      \emph{target constraint} $C$ can be added to a formula while
+      preserving its set of satisfying assignments.  That is, any
+      assignment that satisfies $F$ also satisfies $F \land C$.  RUP
+      justifies $C$ by assuming $\obar{C}$ holds and showing, via a
+      sequence of \emph{RUP steps}, that this leads to a
+      contradiction.  It accumulates a partial assignment $\assign$
+      based on unit propagations starting the empty set.
+      Each RUP step accumulates more assigned
+      literals by performing a unit propagation of the form $\assign
+      \leftarrow \uprop(\assign, D)$, where constraint $D$ is either
+      $C_j$, a prior constraint, or $\obar{C}$, the negation of the
+      target constraint.  The final step causes a contradiction,
+      where $\simplify{D}{\assign}$ is infeasbile.
 
-\section{RUP Example}
+
+\subsection{RUP Example}
 
 As an example, consider the following three constraints:
 \begin{center}
@@ -400,18 +330,85 @@ $C_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $3 \obar{x}_3$ & $\geq 3$ \\
 \bottomrule
 \end{tabular}
 \end{center}
-Our goal is to add the constraint $C = 2 x_1 + x_2 + x_3 \geq 2$ via RUP using these constraints, without any prior unit constraints.
-RUP proceeds as follows:
+Our goal is to add the constraint $C = 2 x_1 + x_2 + x_3 \geq 2$.
+The RUP steps proceeds as follows:
 \begin{enumerate}
 \item
-We can see that $\obar{C} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_1 = \obar{x}_1 \geq 1$.
+We can see that $\obar{C} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_1 = \{ \obar{x}_1 \}$.
 \item
-With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_2 = \obar{x}_1 + x_2 \geq 2$.
+With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_2 = \{ \obar{x}_1, x_2 \}$.
 \item
-  Constraint $C_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_3 = \obar{x}_1 + x_2 + x_3 \geq 3$.
+  Constraint $C_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_3 = \{ \obar{x}_1,  x_2, x_3 \}$.
 \item
   Constraint $C_3$ simplifies to $ 0 \geq 3$, which is infeasible.
 \end{enumerate}
+
+\section{Pseudo-Boolean Implication Proofs}
+
+A Pseudo-Boolean Implication Proof (PBIP) provides a systematic way to
+prove that a PB formula $F$ is unsatisfiable.  It is given by a sequence of constraints, referred to as the {\em proof sequence}:
+\begin{displaymath}
+  C_1, C_2, \ldots, C_m, C_{m+1}, \ldots, C_t
+\end{displaymath}  
+such that the first $m$ constraints are those of formula $F$, while each {\em added} constraint $C_i$
+for  $i > m$ follows by implication from the preceding constraints.
+That is, 
+\begin{eqnarray}
+\bigwedge_{1 \leq j < i} \func{C_j} & \imply & \func{C_i} \label{eqn:proofsequence}
+\end{eqnarray}
+The proof completes with the addition of an infeasible constraint for $C_t$.
+By the transitivity of implication, we have therefore proved that $F$ is not satisfiable.
+
+Constraints $C_{i}$ with $i > m$, can be added in two different ways, corresponding to two different reasoning modes.
+\begin{enumerate}
+\item In {\em implication mode}, constraint $C_i$ follows by implication from at most two prior constraints in the  proof sequence.
+  That is, for some $H_i \subseteq \{C_1, C_2,
+  \ldots, C_{i-1}\}$ with $|H_i| \leq 2$ such that:
+\begin{eqnarray}
+\bigwedge_{C_j \in H_i} \func{C_j} & \imply & \func{C_i} \label{eqn:implicationmode}
+\end{eqnarray}
+Set $H_i$ is referred to as the {\em hint} for proof step $i$.
+\item In \emph{RUP} mode, the new constraint is justified by reverse
+  unit propagation.  Again, a sequence of hints is specified, where
+  each hint is of either of the form $[C_j, \lit]$,
+  where $j \leq i$ and $\lit$ is the unit
+  literal propagated by this step, or of the form $[C_j]$, where $j \leq i$.
+  When $j < i$, unit
+  propagation is performed using constraint $C_j$, while for $j = i$,
+  it is performed using $\obar{C}_i$, the negation of the target
+  constraint.
+  The final hint is of the form $[C_j]$.
+  Note that if a single constraint unit propagates multiple literal, these are listed as separate steps.
+
+\end{enumerate}
+
+Unless ${\it P} = {\it NP}$, we cannot guarantee that a proof checker
+can validate even a single implication step of a PBIP proof in polynomial time.
+In particular, consider an equational constraint $C$ encoding an
+instance of the subset sum problem, and let $C_{\leq}$ and $C_{\geq}$
+denote its conversion into a pair of ordering constraints such that
+$\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.  Consider a PBIP
+proof step to add the constraint $\obar{C}_{\leq}$ having the 
+$C_{\geq}$ as the only hint.  Proving that
+$\func{C_{\geq}} \imply \func{\obar{C}_{\leq}}$, requires proving that
+$\func{C_{\leq}} \land \func{C_{\geq}} = \nil$, i.e., that $C$ is unsatisfiable.
+
+On the other hand, checking the correctness of a PBIP proof can be
+performed in {\em pseudo-polynomial} time, meaning that the complexity
+will be bounded by a polynomially sized formula over the numeric
+values of the integer parameters.  This can be done using binary
+decision diagrams [BBH-2022].  In particular, an ordering constraint
+over $n$ variables in coefficient-normalized form with constant $b$
+will have a BDD representation with at most $b \cdot n$ nodes.  For an
+implication proof step where the added constraints and the hints all
+have constants less than or equal to $b$, the number of BDD operations
+to validate the step will be $O(b^{2} \cdot n)$ when there is a single
+hint and $O(b^{3} \cdot n)$ when there are two hints.  This complexity
+is polynomial in $b$, but it would be exponential in the size of a
+binary representation of $b$.  The number of BDD operations
+for each unit propagation step in a RUP proof will be linear in the
+size of the BDD and therefore $O(b \cdot n)$\@.
+
 
 \section{Converting PBIP Proof into Clausal Proof}
 
@@ -435,85 +432,73 @@ We assume our trusted BDD package implements the following operations
 \item[$\fname{BDD\_AND}(\nodeu, \nodev)$:] Compute BDD $\nodew$ as the conjunction of BDDs $\nodeu$ and $\nodev$.  Also generate proof steps ending with the addition of the clause $[\obar{u} \lor \obar{v} \lor w]$ proving the $(u \land v) \imply w$.
 \item[$\fname{BDD\_IMPLY}(\nodeu, \nodev)$:]
   Generate proof steps ending with the addition of the clause $[\obar{u} \lor v]$ indicating that $u \imply v$.
-\item[$\fname{BDD\_OR}(\nodeu, \nodev)$:] Compute BDD $\nodew$ as the disjunction of BDDs $\nodeu$ and $\nodev$.  Also generate proof steps ending with the addition of the clause $[u \lor v \lor \obar{w}]$.  We use this when working with negated operands to prove that
-$(\obar{u} \land \obar{v}) \imply \obar{w}$.
+\item[$\fname{BDD\_FALSIFIES}(\assign, \nodeu)$:] For (possibly partial) assignment $\assign = \{\lit_1, \lit_2, \ldots, \lit_k\}$
+  generate proof steps ending with the addition of the clause $[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_k \lor \obar{u}]$.
+  This clause indicates
+  that any total assignment consistent with $\assign$ will define a path in the BDD leading from root node $\nodeu$ to the leaf node representing false.
+\item[$\fname{BDD\_SATISFIES}(\assign, \nodeu)$:] For (possibly partial) assignment $\assign = \{\lit_1, \lit_2, \ldots, \lit_k\}$
+  generate proof steps ending with the addition of the clause $[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_k \lor u]$.
+  This clause indicates
+  that any total assignment consistent with $\assign$ will define a path in the BDD leading from root node $\nodeu$ to the leaf node representing true.
   
 \end{description}
 
-Our goal is the create a TBDD representation $\trust{\nodeu_i}$ for
+Our goal is the create a TBDD representation $\trust{\nodeu}_i$ for
 each constraint $C_i$ in the proof sequence.  The final step will
 generate a trusted BDD for the BDD leaf node representing false.  This
 will cause the empty clause to be added to the proof.
 When adding constraint $C_i$, its BDD
 representation $\nodeu_i$ can be generated as $\fname{BDD}(C_i)$.  To upgrade
-this to the trusted BDD $\trust{\nodeu_i}$ requires generating the unit clause $[u_i]$.
-We assume that every prior proof constraint $C_{i'}$, with $i' < i$, has a TBDD representation $\trust{\nodeu_{i'}}$ with an associated unit clause
+this to the trusted BDD $\trust{\nodeu}_i$ requires generating the unit clause $[u_i]$.
+We assume that every prior proof constraint $C_{i'}$, with $i' < i$, has a TBDD representation $\trust{\nodeu}_{i'}$ with an associated unit clause
 $[u_{i'}]$.
 
 When $C_i$ is added by implication mode, generating its unit clause is
-based on directly on the constraints given as the hint.
+based on the constraints given as the hint.
 If the hint consists of the
 single constraint $C_{i'}$ we can make use of its TBDD representation
-$\trust{\nodeu_{i'}}$, by performing the implication test
+$\trust{\nodeu}_{i'}$, by performing the implication test
 $\fname{BDD\_IMPLY}(\nodeu_{i'}, \nodeu_i)$, generating the clause
 $[\obar{u}_{i'}, u_i]$.  Resolving this with the unit clause
 $[u_{i'}]$ then gives the unit clause $[u_i]$.  When the hint consists
 of two constraints $C_{i'}$ and $C_{i''}$, we can make use of their
-TBDD representation $\trust{\nodeu_{i'}}$ and $\trust{\nodeu_{i''}}$.
+TBDD representation $\trust{\nodeu}_{i'}$ and $\trust{\nodeu}_{i''}$.
 That is, let $\nodew = \fname{BDD\_AND}(\nodeu_{i'}, \nodeu_{i''})$,
 generating the clause
 $[\obar{u}_{i'} \lor \obar{u}_{i''}  \lor w]$, and then
 perform the implication test $\fname{BDD\_IMPLY}(w, \nodeu_i)$, generating the clause $[\obar{w} \lor u_i]$.
 Resolving these clauses with the unit clauses for TBDDs
-$\trust{\nodeu_{i'}}$ and $\trust{\nodeu_{i''}}$
+$\trust{\nodeu}_{i'}$ and $\trust{\nodeu}_{i''}$
 yields the unit clause $[u_i]$.
 
-Adding constraint $C_i$ via a counterfactual sequence requires
+Adding constraint $C_i$ via a sequence of RUP steps requires
 converting its proof by contradiction into a conventional implication
-proof.  We do so by constructing the implications in reverse order.
-For each counterfactual constraint $D^i_j$ in the
-sequence, where $1 \leq j \leq k$, let $\nodev_j =
-\fname{BDD}(\obar{D}^i_j)$, the BDD representation of the negation of
-the constraint.  By convention, we define $D^i_0 = \obar{C}_i$ and
-also have $\nodev_0 = \nodeu_i$.  In processing counterfactual
-constraint $D^{i}_j$, we assume that for any $j' < j$, we have already
-generated proof clause $[\obar{v}_{j'} \lor u_i]$.  That is, the
-negation of constraint $D^{i}_{j'}$ implies the target constraint
-$C_i$.  For $j' = 0$, this clause is the tautology $[\obar{u}_i \lor u_i]$.
+proof.
+Let $\nodeu_i$ denote the BDD representation of constraint
+$C_i$.  For each literal $\lit$ that is unit propagated by a RUP step,
+we add the clause $[u_i \lor \lit]$, indicating that literal $\lit$
+will hold if the target constraint is falsified.  To do so for literal
+$\lit_k$, suppose that we have clauses of the form $[u_i \lor
+  \lit_{j}]$ for $1 \leq j \leq k$, and that unit propagation is based
+either on constraint $D = C_{i'}$ for $i' < i$, represented by TBDD node
+$\trust{\nodeu}_{i'}$ and denoted by literal $u_{i'}$, or based on
+constraint $D = \obar{C}_{i}$ and denoted by literal $\obar{u}_i$.
 
-Processing counterfactual constraint $D^i_j$ then requires generating a proof of the clause 
-$[\obar{v}_{j} \lor u_i]$.  Consider three cases for the hint of this step:
-\begin{enumerate}
-\item The hint consists of a single counterfactual constraint $D^{i}_{j'}$.  We therefore have the constraint
-  $[\obar{v}_{j'} \lor u_i]$.
-  Performing implication test
-  $\fname{BDD\_IMPLY}(v_j, v_{j'})$
-  yields the clause $[\obar{v}_j, v_{j'}]$.  Combining the two clauses by resolution yields the clause
-  $[\obar{v}_{j} \lor u_i]$.
+Assignment $\assign = \{ \lit_1, \lit_2, \ldots, \lit_{k-1}, \obar{\lit}_{k} \}$
+should cause $\simplify{D}{\assign}$ to be infeasible.
+For $D = C_{i'}$, calling
+$\fname{BDD\_FALSIFIES}(\assign, \nodeu_{i'})$ will generate the clause
+$[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_{k-1} \lor \lit_k \lor \obar{u}_{i'}]$.
+Resolving this with clauses of the form $[u_i \lor \lit_{j}]$ as well as the unit clause $[u_{i'}]$
+will yield clause $[u_i \lor \lit_{k}]$.
+For $D = \obar{C}_{i}$, calling
+$\fname{BDD\_SATISFIES}(\assign, \nodeu_i)$ will generate the clause
+$[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_{k-1} \lor \lit_k \lor u_i]$.
+Resolving this with clauses of the form $[u_i \lor \lit_{j}]$
+will yield clause $[u_i \lor \lit_{k}]$.
+For the final step, no unit propagation occurs, and so the resolution steps will yield unit clause $[u_i]$,
+completing the validation of constraint $C_i$.
 
-\item The hint consists of two constraints:
- a previous proof constraint $C_{i'}$, and
-  a previous counterfactual constraint $D^{i}_{j'}$.
-  We therefore have a TBDD representation $\trust{\nodeu_{i'}}$ with the unit clause $[u_{i'}]$, and a BDD representation $\nodev_{j'}$ with the clause
-$[\obar{v}_{j'} \lor u_i]$  
-  let $\nodew = \fname{BDD\_AND}(\nodeu_{i'}, \nodev_j)$, yielding the clause $[\obar{u}_{i'} \lor \obar{v}_j \lor w]$, and perform the implication test
-  $\fname{BDD\_IMPLY}(\nodew, \nodev_{j'})$, yielding the clause $[\obar{w} \lor v_{j'}]$.  Resolving these four clauses yields 
-$[\obar{v}_{j} \lor u_i]$.
-
-  \item The hint consists of two previous counterfactual constraints.
-    $D^{i}_{j'}$ and $D^{i}_{j''}$.  We therefore have clauses
-    $[\obar{v}_{j'} \lor u_i]$ and $[\obar{v}_{j''} \lor u_i]$.
-    Let $\nodew = \fname{BDD\_OR}(\nodev_{j'}, \nodev_{j''})$, yielding the clause
-    $[v_{j'} \lor v_{j''} \lor \obar{w}]$, and perform the implication test $\fname{BDD\_IMPLY}(v_j, w)$, yielding the clause
-    $[\obar{v}_j \lor w]$.  Resolving these four clauses yields the clause
-    $[\obar{v}_{j} \lor u_i]$.
-\end{enumerate}  
-The final counterfactual
-constraint $D^{i}_j$ yields a conflict, but since $\nodev_k$ is the
-BDD representation of its negation, it will be the BDD leaf node
-representing true.  Clause $[\obar{v}_{k} \lor u_i]$ will therefore
-simplify to be the unit clause $[u_i]$, enabling the BDD
-representation of constraint $C_i$ to be trusted.
 
 %%\bibliography{references}
 

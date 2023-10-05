@@ -37,7 +37,7 @@ step then derives one of more additional unit constraints based on the
 set of previously derived unit constraints, as well as either the
 complement of the target constraint or some other preceding
 constraint.  The final step should then cause a contradiction---the
-set of accumulated unit literals falsifies the final constraint.
+set of accumulated unit constraints falsifies the final constraint.
 
 PBIP files build on the OPB format for describing PB constraint
 problems, as documented in:
