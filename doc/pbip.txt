@@ -12,12 +12,10 @@ Two reasoning modes are supported:
 * Implication mode, where each new constraint follows by implication
   from one or two previous constraints.
 
-* Counterfactual mode, where a "target" constraint is introduced
-  followed by a sequence of implication steps that would hold if the
-  target constraint were false.  The final step in the sequence yields
-  an infeasible constraint, thus showing by contradiction that the
-  target constraint must hold.
-
+* Reverse unit propagation (RUP) mode, where the validity of a
+  constraint by contradiction.  That is, a series of unit propagations
+  are performed based on the complement of the constraint and other
+  constraints until a contradiction is reached.
 
 The format assumes that each input constraint is encoded as a set of
 clauses in conjunctive normal form (CNF).  The clauses for all of the
@@ -33,12 +31,13 @@ constraint can be any of the following: an input constraint, one
 proved by an implication step, or the target constraint of a completed
 counterfactual reasoning sequence.
 
-When in counterfactual mode, each derived constraint must follow by
-implication from one or two of the preceding constraints.  An
-antecedent can be any constraint that qualifies as an antecedent while
-in implication mode, as well as: the negation of the target constraint
-or a derived constraint from the same counterfactual sequence.  At
-least one of the antecedents must be of these latter two types.
+When in RUP mode, the constraint to be derived is set as a target, and
+a (initially empty) set of unit constraints is accumulated.  Each RUP
+step then derives one of more additional unit constraints based on the
+set of previously derived unit constraints, as well as either the
+complement of the target constraint or some other preceding
+constraint.  The final step should then cause a contradiction---the
+set of accumulated unit literals falsifies the final constraint.
 
 PBIP files build on the OPB format for describing PB constraint
 problems, as documented in:
@@ -50,7 +49,7 @@ variable name of the form xN can be preceded by '~' (e.g., ~x2) to
 indicate its logical negation.  This extension is also allowed by many
 other tools.
 
-There are five types of lines:
+There are four types of lines:
 
 1. Comment lines begin with '*' and contain arbitrary text
 
@@ -68,22 +67,16 @@ There are five types of lines:
    terminated with end-of-line.  Constraints are numbered from 1,
    starting with the input constraints.
 
-4. Counterfactual mode initiated with a line beginning with 'k',
-   followed by the target constraint, expressed in OPB format and
-   terminated by ';' It has no hints.  It is counted as one of the
-   numbered constraints.
-
-5. Counterfactual assertions lines have the same syntax as
-   implication-mode assertions, except that they start with 'A'.  The
-   constraints listed after the ';' can include -T, where T is the ID
-   of the target constraint.  This is to indicate that these
-   constraints are implied by the logical negation of the target
-   constraint.
-
-An infeasible counterfactual assertion indicates the completion of a
-counterfactual mode sequence.  After that line, other
-assertions can list the ID of the target constraint as an
-antecedent.
+4. RUP lines begin with 'u'.  This is followed by a constraint,
+   expressed in OPB format and terminated by ';' Then a sequence of
+   lists is given, where each list is of the form [C L1 ... Lk]
+   indicating that constraint C will propagate additional units L1,
+   ..., Lk.  C can either be the ID of a previous constraint, or it
+   can be that of the current constraint.  The latter case is known as
+   a "self reference", and its unit propagations should be based on
+   the negation of the target constraint.  The final list is qof the
+   form [C], and it must be falsified by the accumulated set of
+   literals.
  
 For an unsatisfiability proof, the final constraint should be
 infeasible, e.g., 0 >= 1.
@@ -160,58 +153,50 @@ a >= 1 ; 10 12
 
 EXAMPLE #2
 
-Counterfactual Proof Example
+RUP Proof Example
 
-The following example starts with five input constraints.  It uses
-counterfactual reasoning over the first four constraints to justify the
-constraint 2 * ~x1 + 1 * ~x2 + 1 * ~x3 >= 2.  Logically, this is
-equivalent to ~x1 | (~x2 & ~x3).  The fact that a single PB constraint
-can represent a Boolean expression of this complexity demonstrates the
-expressive power of PB constraints.  The fifth input constraint is the
-negation of the target constraint: 2 * x1 + 1 * x2 + 1 * x3 >= 3,
-encoding the Boolean formula x1 & (x2 | x3).  Combining the target
-constraint with input constraint #5 will therefore yield a contradiction.
+The following example has five input constraints.  It uses RUP over
+the first four to justify the constraint 2 * ~x1 + 1 * ~x2 + 1 * ~x3
+>= 2.  Logically, this is equivalent to ~x1 | (~x2 & ~x3).  The fact
+that a single PB constraint can represent a Boolean expression of this
+complexity demonstrates the expressive power of PB constraints.  The
+final input constraint is the negation of the target constraint: 2 *
+x1 + 1 * x2 + 1 * x3 >= 3, encoding the Boolean formula x1 & (x2 |
+x3).  Combining the target constraint with the final will therefore
+yield a contradiction.
 
-As in a RUP proof, a counterfactual proof starts by negating the
-target constraint and extracting any unit constraints (ones of the
-form x_i >= 1 or ~x_i >= 1).  These unit constraints are then applied
-to other constraints to generate more unit constraints, until
-eventually a conflict is reached.  One interesting feature of PB
-constraints is that the same constraint can be used to perform unit
-propagation multiple times.  For example, our negated target
-constraint will first propagate x1 >= 1, but later, when unit
-constraint ~x2 >= 1 has been propagated, it can then propagate the
-constraint x3.  The following proof demonstrates this idea.
 
-The following example is incomplete in that it does not list which
-clauses encode the input constraints.
+CNF file:
+
+p cnf 5 6
+c Input constraint #1
+-2  4 0
+c Input constraint #2
+-1 -4 0
+c Input constraint #3
+-3  5 0
+c Input constraint #4
+-3  -5 0
+c Final input constraint
+1 0
+2 3 0
+
+PBIP file:
 
 * Input constraint #1
-i       1 ~x2       1  x4            >= 1 ;
+i       1 ~x2       1  x4            >= 1 ; 1
 * Input constraint #2
-i 1 ~x1             1 ~x4            >= 1 ;
+i 1 ~x1             1 ~x4            >= 1 ; 2
 * Input constraint #3
-i             1 ~x3       1  x5      >= 1 ;
+i             1 ~x3       1  x5      >= 1 ; 3
 * Input constraint #4
-i             1 ~x3       1 ~x5      >= 1 ;
-* Input constraint #5: Contradict our proposed target constraint
-i 2  x1 1  x2 1  x3 >= 3 ;
-**** Counterfactual reasoning.  Target is constraint #6
-k 2 ~x1 1 ~x2 1 ~x3 >= 2 ;
-** Perform unit propagations.  Can use -6 as hint
-* Constraint #7
-A 1  x1 >= 1 ; -6
-* Constraint #8
-A 1 ~x4 >= 1 ; 2 7
-* Constraint #9
-A 1 ~x2 >= 1 ; 1 8
-* Constraint #10 (reuse negated target)
-A 1  x3 >= 1 ; -6 9
-* Constraint #11
-A 1  x3 1  x5 >= 2 ; 3 10
-* Complete counterfactual reasoning by showing contradiction
-* Constraint #12
-A       >= 1 ; 4 11
-** From here on, can assume that constraint #6 is valid
+i             1 ~x3       1 ~x5      >= 1 ; 4
+* RUP step justifies constraint #5.  Note the two self references.
+u 2 ~x1 1 ~x2 1 ~x3 >= 2 ;  [5 1]  [2 -4]  [1 -2]  [5 3]  [3 5]  [4]
+* Final input constraint: Contradict our proposed target constraint.
+* This becomes constraint #6
+i 2  x1 1  x2 1  x3 >= 3 ; 5 6
 * Target constraint contradicts input constraint #5
-a                                     >= 1 ; 5 6
+a >= 1 ; 5 6
+
+
