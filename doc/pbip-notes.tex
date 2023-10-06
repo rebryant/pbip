@@ -41,6 +41,7 @@
 \newcommand{\nil}{\bot}
 \renewcommand{\obar}[1]{\overline{#1}}
 \newcommand{\lit}{\ell}
+\newcommand{\mlit}{m}
 \newcommand{\ite}{\mbox{\it ITE}}
 \newcommand{\restrict}[2]{#1|_{#2}}
 \newcommand{\trust}[1]{\dot {#1}}
@@ -143,45 +144,38 @@ $\lit = \obar{x}$.
 A {\em pseudo-Boolean constraint} is a linear expression, viewing
 Boolean variables as ranging over integer values $0$ and $1$.  That
 is, 
-a constraint $C$ has the form
+a \emph{relational constraint} $c$\footnote{We use lower case $c$ to denote a constraint, reserving upper case $C$ to denote a clause.}  has the form
 \begin{eqnarray}
 \sum_{1 \leq i \leq n} a_i \lit_i & \# & b \label{eqn:pbconstraint}
 \end{eqnarray}
-where: 1) the relational operator $\#$ is $<$, $\leq$, $=$, $\geq$, or
-$>$, and 2) the coefficients $a_i$, as well as the constant $b$, are
-integers.
-Constraints with relational operator $=$ are referred to as {\em equational constraints},
-while others are referred to as {\em ordering constraints}.
+where:
+1) the relational operator $\#$ is $<$, $\leq$, $\geq$, or $>$,
+and 2) the coefficients $a_i$, as well as the constant $b$, are
+integers.  We can also represent an \emph{equational constraint}, having
+relational operator $=$, as the conjunction of two ordering constraints having the same coefficients but one with
+operator $\leq$ and the other with operator $\geq$.
 
-Constraint $C$ denotes a Boolean function, written
-$\func{C}$, mapping assignments to the set of variables $X$ to $1$
-(true) or $0$ (false).  Constraints $C_1$ and $C_2$ are said to {\em
-  equivalent} when $\func{C_1} = \func{C_2}$.
-Constraint $C$ is said to be {\em infeasible} when $\func{C} = \bot$, i.e., it always evaluates $0$.
-$C$ is said to be {\em trivial} when $\func{C} = \top$, i.e., it always evaluates to $1$.
 
+Constraint $c$ denotes a Boolean function, written
+$\func{c}$, mapping assignments to the set of variables $X$ to $1$
+(true) or $0$ (false).  Constraints $c_1$ and $c_2$ are said to {\em
+  equivalent} when $\func{c_1} = \func{c_2}$.
+Constraint $c$ is said to be {\em infeasible} when $\func{c} = \bot$, i.e., it always evaluates $0$.
+$c$ is said to be {\em trivial} when $\func{c} = \top$, i.e., it always evaluates to $1$.
 
 As described in [Gocht-Phd-2022], the following are some properties of pseudo-Boolean constraints:
 \begin{itemize}
 \item Constraints with relational operators $<$, $\leq$, and $>$ can be
   converted to equivalent constraints with relational operator $\geq$.
 \item
-The logical negation of an ordering constraint $C$, written $\obar{C}$,
-can also be expressed as a constraint.  That is, assume that $C$
+The logical negation of relational constraint $c$, written $\obar{c}$,
+can also be expressed as a relational constraint.  That is, assume that $c$
 has been converted to a form where it has relational operator $\geq$.
-Then replacing $\geq$ by $<$ yields the negation of $C$.  
-\item
-A constraint $C$ with relational operator $=$ can be converted to the
-pair of constraints $C_{\leq}$ and $C_{\geq}$, formed by replacing
-$\#$ in (\ref{eqn:pbconstraint}) by $\leq$ and $\geq$, respectively.
-These then satisfy $\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.
+Then replacing $\geq$ by $<$ yields the negation of $c$.  
 \end{itemize}
 We will generally
 assume that constraints have relational operator $\geq$, since other
-forms can be translated to it.  In some contexts, however, we will
-maintain equational constraints 
-intact, to avoid replacing it by two ordering constraints.
-
+forms can be translated to it.
 
 We consider two {\em normalized forms} for ordering constraints: A
 {\em coefficient-normalized} constraint has only nonnegative
@@ -194,37 +188,41 @@ Typically, the coefficient-normalized form is more convenient when
 viewing a PB constraint as a logical expression, while the
 variable-normalized form is more convenient when viewing a constraint
 as an arithmetic expression.  In this document, we focus on the logical
-aspects, giving the general form of constraint $C$ as
+aspects, giving the general form of constraint $c$ as
 \begin{eqnarray}
 \sum_{1 \leq i \leq n} a_{i} \lit_{i} & \geq & b \label{eqn:coeff-normalized}
 \end{eqnarray}
 with each $a_{i} \geq 0$, and with $\lit_{i} = x_i$ whenever $a_i = 0$.
 
-Ordering constraint $C$ in coefficient-normalized form is trivial if and only
-if $b \leq 0$.  Similarly, $C$ is infeasible if and only if
+Ordering constraint $c$ in coefficient-normalized form is trivial if and only
+if $b \leq 0$.  Similarly, $c$ is infeasible if and only if
 $b > \sum_{1 \leq i \leq n} {a_{i}}$.  By contrast, testing feasibility or triviality
 of an equational constraint is not straightforward, in that an instance of the
 subset sum problem [Garey] can be directly encoded as an equational
 constraint.
 
 An {\em assignment} is a mapping $\assign : X' \rightarrow \{0,1\}$,
-for some $X' \subseteq X$.  The assignment is {\em total} when $X' =
-X$ and {\em partial} when $X' \subset X$.  Assignment $\assign$ can
+for some $X' \subseteq X$.  The assignment is {\em total} when
+$X' = X$ and {\em partial} when $X' \subset X$.  Assignment $\assign$ can
 also be viewed as a set of literals, where $x_i \in \assign$ when
 $\assign(x_i) = 1$ and $\obar{x}_i \in \assign$ when $\assign(x_i) = 0$.
+Assignment $\assign$ is said to be \emph{consistent} with assignment $\assign'$ when $\assign \subseteq \assign'$.
+
 
 Some nomenclature regarding constraints of the form of
 (\ref{eqn:coeff-normalized}) will prove useful.  The {\em constraint
   literals} are those literals $\lit_i$ such that $a_i \not = 0$.  A
 {\em cardinality constraint} has $a_i \in \{0,1\}$ for $1 \leq i \leq
 n$.  A cardinality constraint with $b=1$ is referred to as a {\em
-  clause}: at least one of the constraint literals must be assigned 1
-to satisfy the constraint.  A cardinality constraint with $\sum_{1\leq
+  clausal constraint}: at least one of the constraint literals must be assigned 1
+to satisfy the constraint.  It is logically equivalent to a clause in a conjunctive normal form (CNF) formula.
+A cardinality constraint with $\sum_{1\leq
   i\leq n} a_i = b$ is referred to as a {\em conjunction}: all of the
 constraint literals must be assigned $1$ to satisfy the constraint.
-Observe that any assignment $\assign$ can be viewed as a conjunction,
-having coefficient $a_i = 1$ for each $\lit_i \in \assign$.  A
-conjunction with for which $a_i = 1$ for just a single value of $i$ is
+%% Observe that any assignment $\assign$ can be viewed as a conjunction,
+%% having coefficient $a_i = 1$ for each $\lit_i \in \assign$.
+A
+conjunction for which $a_i = 1$ for just a single value of $i$ is
 referred to as a {\em unit} constraint: it is satisfied if and only if
 literal $\lit_i$ is assigned $1$.
 
@@ -237,17 +235,17 @@ literal $\lit_i$ is assigned $1$.
 
 %% We shall make use of constraints representing the negations of
 %% assignments.  That is, the negation of assignment $\assign$, written
-%% $\nassign$, is the clause:
+%% $\nassign$, is the clausal constraint::
 %% $\sum_{\lit_i \in \assign} \obar{\lit}_i \;\geq\; 1$.
 
-We let $\simplify{C}{\assign}$ denote the constraint resulting when $C$ is
-simplified according assignment $\assign$.  That is, assume $\assign$ is defined over a set of variables $X'$ and
+We let $\simplify{c}{\assign}$ denote the constraint resulting when $c$ is
+simplified according assignment $\assign$.  Assume $c$ has the form of (\ref{eqn:coeff-normalized}) and
 partition the indices $i$ for $1 \leq i \leq n$ into
 three sets:
-$I^{+}$, consisting of those indices $i$ such that $\lit_{i} \in \assign$,
-$I^{-}$, consisting of those indices $i$ such that $\obar{\lit}_{i} \in \assign$,
-and $I^{X}$ consisting of those indices $i$ such that $x_i \not \in X'$.
-With this, $\simplify{C}{\assign}$ can be written as $\sum_{1 \leq i \leq n} a'_i \; \geq \; b'$
+$I^{+}$, consisting of those indices $i$ such that $\lit_i \in \assign$,
+$I^{-}$, consisting of those indices $i$ such that $\obar{\lit}_i \in \assign$,
+and $I^{X}$ consisting of those indices $i$ such that neither $\lit_i$ nor $\obar{\lit}_i$ is in $\assign$.
+With this, $\simplify{c}{\assign}$ can be written as $\sum_{1 \leq i \leq n} a'_i \; \geq \; b'$
 with $a'_i$ equal to $a_i$ for $i \in I^{X}$ and equal to $0$ otherwise, and with $b' = b - \sum_{i\in I^{+}} a_i$.
 
 
@@ -256,10 +254,10 @@ with $a'_i$ equal to $a_i$ for $i \in I^{X}$ and equal to $0$ otherwise, and wit
 %% \end{eqnarray}
 
 %% **** This looks fishy ****
-%% We will find cases where we want to condition a constraint $C$ based
+%% We will find cases where we want to condition a constraint $c$ based
 %% on a partial assignment $\assign$, expressing the constraint $\assign
-%% \imply C$.  In particular, if constraint $C$ is of the form
-%% (\ref{eqn:coeff-normalized}), then $\assign \imply C$ can be written as the PB constraint
+%% \imply c$.  In particular, if constraint $c$ is of the form
+%% (\ref{eqn:coeff-normalized}), then $\assign \imply c$ can be written as the PB constraint
 %% \begin{eqnarray}
 %% \sum_{\lit_i \in \assign} b\, \obar{\lit}_i \;\; + \;\;  \sum_{1 \leq i \leq n} a_{i} \lit_{i} & \geq & b \label{eqn:implication}
 %% \end{eqnarray}
@@ -273,14 +271,14 @@ assignment $\assign$ that satisfies all of the constraints in $F$, and
 
 \section{(Reverse) Unit Propagation}
 
-Consider constraint $C$ in coefficient-normalized form.  Literal
-$\lit$ is {\em unit propagated} by $C$ when the assignment $\assign =
-\{ \obar{\lit} \}$ causes the constraint $\simplify{C}{\assign}$ to become
+Consider constraint $c$ in coefficient-normalized form.  Literal
+$\lit$ is {\em unit propagated} by $c$ when the assignment $\assign =
+\{ \obar{\lit} \}$ causes the constraint $\simplify{c}{\assign}$ to become
 infeasible.  As the name implies, a unit-propagated literal $\lit$ then becomes a unit constraint.
 Observe that a single constraint can unit propagate
 multiple literals.  For example, $4 x_1 + 3 \obar{x}_2 + x_3 \geq 6$
 unit propagates both $x_1$ and $\obar{x}_2$.
-For an ordering constraint $C$ in coefficent-normalized form
+For constraint $c$ in coefficent-normalized form
 (\ref{eqn:coeff-normalized}), detecting which literals unit propagate
 is straightforward.  Let $A = \sum_{1 \leq i \leq n} a_{i}$.  Then
 literal $\lit_{i}$ unit propagates if and only if $A - a_{i} < b$,
@@ -288,32 +286,32 @@ i.e., $a_{i} > A - b$.  For example, the constraint $4 x_1 + 3
 \obar{x}_2 + x_3 \geq 6$ has $A = 7$ and $b=6$, yielding $A-b=1$.
 This justifies the unit propagations of both $x_1$ and $\obar{x}_2$.
 
-For constraint $C$, we let $\unit(C)$ denote the set of literals it
-unit propagates.  Often, by simplifying a constraint $C$ according to
-a partial assignment $\assign$, the simplified constraint $\simplify{C}{\assign}$
-will unit propagate new literals, given by $\unit(\simplify{C}{\assign})$.  These
+For constraint $c$, we let $\unit(c)$ denote the set of literals it
+unit propagates.  Often, by simplifying a constraint $c$ according to
+a partial assignment $\assign$, the simplified constraint $\simplify{c}{\assign}$
+will unit propagate new literals, given by $\unit(\simplify{c}{\assign})$.  These
 literals can then be added to the partial assignment.  Formally,
-define the operation $\uprop$ as  $\uprop(\assign, C) = \assign \cup \unit(\simplify{C}{\assign})$.
+define the operation $\uprop$ as  $\uprop(\assign, c) = \assign \cup \unit(\simplify{c}{\assign})$.
 {\em Unit propagation} is then the process of
-repeatedly applying this operation to a set of clauses to expand the
+repeatedly applying this operation to a set of constraints to expand the
 set of literals in a partial assignment.
 
-Consider a formula $F$ consisting of a set of constraints $C_1, C_2,
-\ldots, C_m$.  The {\em reverse unit propagation} (RUP) proof rule
+Consider a formula $F$ consisting of a set of constraints $c_1, c_2,
+\ldots, c_m$.  The {\em reverse unit propagation} (RUP) proof rule
       [Gocht-Phd-2022] uses unit propagation to prove that
-      \emph{target constraint} $C$ can be added to a formula while
+      \emph{target constraint} $c$ can be added to a formula while
       preserving its set of satisfying assignments.  That is, any
-      assignment that satisfies $F$ also satisfies $F \land C$.  RUP
-      justifies $C$ by assuming $\obar{C}$ holds and showing, via a
+      assignment that satisfies $F$ also satisfies $F \land c$.  RUP
+      justifies $c$ by assuming $\obar{c}$ holds and showing, via a
       sequence of \emph{RUP steps}, that this leads to a
       contradiction.  It accumulates a partial assignment $\assign$
-      based on unit propagations starting the empty set.
+      based on unit propagations starting with the empty set.
       Each RUP step accumulates more assigned
-      literals by performing a unit propagation of the form $\assign
-      \leftarrow \uprop(\assign, D)$, where constraint $D$ is either
-      $C_j$, a prior constraint, or $\obar{C}$, the negation of the
+      literals by performing a unit propagation of the form
+      $\assign \leftarrow \uprop(\assign, d)$, where constraint $d$ is either
+      $c_j$, a prior constraint, or $\obar{c}$, the negation of the
       target constraint.  The final step causes a contradiction,
-      where $\simplify{D}{\assign}$ is infeasbile.
+      where $\simplify{d}{\assign}$ is infeasbile.
 
 
 \subsection{RUP Example}
@@ -324,23 +322,23 @@ As an example, consider the following three constraints:
 \toprule    
 \makebox[1cm]{ID} & \multicolumn{6}{c}{Constraint} \\
 \midrule
-$C_1$ & \makebox[0.6cm][l]{$x_1$} & $+$ & \makebox[0.6cm][l]{$2 x_2$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_3$} & \makebox[0.6cm][l]{$\geq 2$} \\
-$C_2$ & $\obar{x}_1$ & $+$ & $\obar{x}_2$ & $+$ & $2 x_3$ & $\geq 2$ \\
-$C_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $3 \obar{x}_3$ & $\geq 3$ \\
+$c_1$ & \makebox[0.6cm][l]{$x_1$} & $+$ & \makebox[0.6cm][l]{$2 x_2$} & $+$ & \makebox[0.6cm][l]{$\obar{x}_3$} & \makebox[0.6cm][l]{$\geq 2$} \\
+$c_2$ & $\obar{x}_1$ & $+$ & $\obar{x}_2$ & $+$ & $2 x_3$ & $\geq 2$ \\
+$c_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $3 \obar{x}_3$ & $\geq 3$ \\
 \bottomrule
 \end{tabular}
 \end{center}
-Our goal is to add the constraint $C = 2 x_1 + x_2 + x_3 \geq 2$.
+Our goal is to add the constraint $c = 2 x_1 + x_2 + x_3 \geq 2$.
 The RUP steps proceeds as follows:
 \begin{enumerate}
 \item
-We can see that $\obar{C} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_1 = \{ \obar{x}_1 \}$.
+We can see that $\obar{c} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_1 = \{ \obar{x}_1 \}$.
 \item
-With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_2 = \{ \obar{x}_1, x_2 \}$.
+With this, constraint $c_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this unit propagates $x_2$, giving  $\assign_2 = \{ \obar{x}_1, x_2 \}$.
 \item
-  Constraint $C_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_3 = \{ \obar{x}_1,  x_2, x_3 \}$.
+  Constraint $c_2$ simplifies to $2 x_3 \geq 1$, which unit propagates $x_3$, giving $\assign_3 = \{ \obar{x}_1,  x_2, x_3 \}$.
 \item
-  Constraint $C_3$ simplifies to $ 0 \geq 3$, which is infeasible.
+  Constraint $c_3$ simplifies to $ 0 \geq 3$, which is infeasible.
 \end{enumerate}
 
 \section{Pseudo-Boolean Implication Proofs}
@@ -348,50 +346,46 @@ With this, constraint $C_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this 
 A Pseudo-Boolean Implication Proof (PBIP) provides a systematic way to
 prove that a PB formula $F$ is unsatisfiable.  It is given by a sequence of constraints, referred to as the {\em proof sequence}:
 \begin{displaymath}
-  C_1, C_2, \ldots, C_m, C_{m+1}, \ldots, C_t
+  c_1, c_2, \ldots, c_m, c_{m+1}, \ldots, c_t
 \end{displaymath}  
-such that the first $m$ constraints are those of formula $F$, while each {\em added} constraint $C_i$
+such that the first $m$ constraints are those of formula $F$, while each {\em added} constraint $c_i$
 for  $i > m$ follows by implication from the preceding constraints.
 That is, 
 \begin{eqnarray}
-\bigwedge_{1 \leq j < i} \func{C_j} & \imply & \func{C_i} \label{eqn:proofsequence}
+\bigwedge_{1 \leq j < i} \func{c_j} & \imply & \func{c_i} \label{eqn:proofsequence}
 \end{eqnarray}
-The proof completes with the addition of an infeasible constraint for $C_t$.
+The proof completes with the addition of an infeasible constraint for $c_t$.
 By the transitivity of implication, we have therefore proved that $F$ is not satisfiable.
 
-Constraints $C_{i}$ with $i > m$, can be added in two different ways, corresponding to two different reasoning modes.
+Constraints $c_{i}$ with $i > m$, can be added in two different ways, corresponding to two different reasoning modes.
 \begin{enumerate}
-\item In {\em implication mode}, constraint $C_i$ follows by implication from at most two prior constraints in the  proof sequence.
-  That is, for some $H_i \subseteq \{C_1, C_2,
-  \ldots, C_{i-1}\}$ with $|H_i| \leq 2$ such that:
+\item In {\em implication mode}, constraint $c_i$ follows by implication from at most two prior constraints in the  proof sequence.
+  That is, for some $H_i \subseteq \{c_1, c_2,
+  \ldots, c_{i-1}\}$ with $|H_i| \leq 2$ such that:
 \begin{eqnarray}
-\bigwedge_{C_j \in H_i} \func{C_j} & \imply & \func{C_i} \label{eqn:implicationmode}
+\bigwedge_{c_j \in H_i} \func{c_j} & \imply & \func{c_i} \label{eqn:implicationmode}
 \end{eqnarray}
 Set $H_i$ is referred to as the {\em hint} for proof step $i$.
 \item In \emph{RUP} mode, the new constraint is justified by reverse
-  unit propagation.  Again, a sequence of hints is specified, where
-  each hint is of either of the form $[C_j, \lit]$,
-  where $j \leq i$ and $\lit$ is the unit
-  literal propagated by this step, or of the form $[C_j]$, where $j \leq i$.
-  When $j < i$, unit
-  propagation is performed using constraint $C_j$, while for $j = i$,
-  it is performed using $\obar{C}_i$, the negation of the target
-  constraint.
-  The final hint is of the form $[C_j]$.
-  Note that if a single constraint unit propagates multiple literal, these are listed as separate steps.
+  unit propagation.  A sequence of hints is provided of the form
+  $[d_1, \mlit_1], [d_2, \mlit_2], \ldots, [d_{k-1},\mlit_{k-1}], [d_k]$,
+  where each $\mlit_j$ is a unit-propagated literal, and
+  $d_{j}$ is either a previous constraint $c_{i'}$ for $i' < i$, or it is the negated target constraint $\overline{c}_i$.
+  The final hint $[d_k]$ should have a conflict with literals $\{\mlit_1, \mlit_2, \ldots, \mlit_{k-1} \}$.
+  If a single constraint unit propagates multiple literals, these are listed as separate steps.
 
 \end{enumerate}
 
 Unless ${\it P} = {\it NP}$, we cannot guarantee that a proof checker
 can validate even a single implication step of a PBIP proof in polynomial time.
-In particular, consider an equational constraint $C$ encoding an
-instance of the subset sum problem, and let $C_{\leq}$ and $C_{\geq}$
+In particular, consider an equational constraint $c$ encoding an
+instance of the subset sum problem, and let $c_{\leq}$ and $c_{\geq}$
 denote its conversion into a pair of ordering constraints such that
-$\func{C} = \func{C_{\leq}} \land \func{C_{\geq}}$.  Consider a PBIP
-proof step to add the constraint $\obar{C}_{\leq}$ having the 
-$C_{\geq}$ as the only hint.  Proving that
-$\func{C_{\geq}} \imply \func{\obar{C}_{\leq}}$, requires proving that
-$\func{C_{\leq}} \land \func{C_{\geq}} = \nil$, i.e., that $C$ is unsatisfiable.
+$\func{c} = \func{c_{\leq}} \land \func{c_{\geq}}$.  Consider a PBIP
+proof step to add the constraint $\obar{c}_{\leq}$ having the 
+$c_{\geq}$ as the only hint.  Proving that
+$\func{c_{\geq}} \imply \func{\obar{c}_{\leq}}$, requires proving that
+$\func{c_{\leq}} \land \func{c_{\geq}} = \nil$, i.e., that $c$ is unsatisfiable.
 
 On the other hand, checking the correctness of a PBIP proof can be
 performed in {\em pseudo-polynomial} time, meaning that the complexity
@@ -428,40 +422,43 @@ A TBDD $\trust{\nodeu}$ consists of the following:
 
 We assume our trusted BDD package implements the following operations
 \begin{description}
-\item[$\fname{BDD}(C)$:] Generate a BDD representation of pseudo-Boolean constraint $C$
+\item[$\fname{BDD}(c)$:] Generate a BDD representation of pseudo-Boolean constraint $c$
 \item[$\fname{BDD\_AND}(\nodeu, \nodev)$:] Compute BDD $\nodew$ as the conjunction of BDDs $\nodeu$ and $\nodev$.  Also generate proof steps ending with the addition of the clause $[\obar{u} \lor \obar{v} \lor w]$ proving the $(u \land v) \imply w$.
 \item[$\fname{BDD\_IMPLY}(\nodeu, \nodev)$:]
   Generate proof steps ending with the addition of the clause $[\obar{u} \lor v]$ indicating that $u \imply v$.
-\item[$\fname{BDD\_FALSIFIES}(\assign, \nodeu)$:] For (possibly partial) assignment $\assign = \{\lit_1, \lit_2, \ldots, \lit_k\}$
-  generate proof steps ending with the addition of the clause $[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_k \lor \obar{u}]$.
+\item[$\fname{BDD\_FALSIFIES}(\nodeu, \assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
+  generate proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor \obar{u}]$.
   This clause indicates
   that any total assignment consistent with $\assign$ will define a path in the BDD leading from root node $\nodeu$ to the leaf node representing false.
-\item[$\fname{BDD\_SATISFIES}(\assign, \nodeu)$:] For (possibly partial) assignment $\assign = \{\lit_1, \lit_2, \ldots, \lit_k\}$
-  generate proof steps ending with the addition of the clause $[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_k \lor u]$.
+\item[$\fname{BDD\_SATISFIES}(\nodeu, \assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
+  generate proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor u]$.
   This clause indicates
   that any total assignment consistent with $\assign$ will define a path in the BDD leading from root node $\nodeu$ to the leaf node representing true.
-  
+\item[$\fname{TBDD\_FROM\_CLAUSE}(C)$:] Generate a TBDD representation $\trust{\nodeu}$ of proof clause $C$.
+\item[$\fname{TBDD\_MAKE\_CLAUSE}(\trust{\nodeu}, C)$:]
+This is to be called when BDD $\nodeu$ is logically equivalent to clause $C$.
+Generate a series of proof steps that culminate with the addition of $C$ to the proof.
 \end{description}
 
 Our goal is the create a TBDD representation $\trust{\nodeu}_i$ for
-each constraint $C_i$ in the proof sequence.  The final step will
+each constraint $c_i$ in the proof sequence.  The final step will
 generate a trusted BDD for the BDD leaf node representing false.  This
 will cause the empty clause to be added to the proof.
-When adding constraint $C_i$, its BDD
-representation $\nodeu_i$ can be generated as $\fname{BDD}(C_i)$.  To upgrade
+When adding constraint $c_i$, its BDD
+representation $\nodeu_i$ can be generated as $\fname{BDD}(c_i)$.  To upgrade
 this to the trusted BDD $\trust{\nodeu}_i$ requires generating the unit clause $[u_i]$.
-We assume that every prior proof constraint $C_{i'}$, with $i' < i$, has a TBDD representation $\trust{\nodeu}_{i'}$ with an associated unit clause
+We assume that every prior proof constraint $c_{i'}$, with $i' < i$, has a TBDD representation $\trust{\nodeu}_{i'}$ with an associated unit clause
 $[u_{i'}]$.
 
-When $C_i$ is added by implication mode, generating its unit clause is
+When $c_i$ is added by implication mode, generating its unit clause is
 based on the constraints given as the hint.
 If the hint consists of the
-single constraint $C_{i'}$ we can make use of its TBDD representation
+single constraint $c_{i'}$ we can make use of its TBDD representation
 $\trust{\nodeu}_{i'}$, by performing the implication test
 $\fname{BDD\_IMPLY}(\nodeu_{i'}, \nodeu_i)$, generating the clause
 $[\obar{u}_{i'}, u_i]$.  Resolving this with the unit clause
 $[u_{i'}]$ then gives the unit clause $[u_i]$.  When the hint consists
-of two constraints $C_{i'}$ and $C_{i''}$, we can make use of their
+of two constraints $c_{i'}$ and $c_{i''}$, we can make use of their
 TBDD representation $\trust{\nodeu}_{i'}$ and $\trust{\nodeu}_{i''}$.
 That is, let $\nodew = \fname{BDD\_AND}(\nodeu_{i'}, \nodeu_{i''})$,
 generating the clause
@@ -471,33 +468,58 @@ Resolving these clauses with the unit clauses for TBDDs
 $\trust{\nodeu}_{i'}$ and $\trust{\nodeu}_{i''}$
 yields the unit clause $[u_i]$.
 
-Adding constraint $C_i$ via a sequence of RUP steps requires
-converting its proof by contradiction into a conventional implication
-proof.
-Let $\nodeu_i$ denote the BDD representation of constraint
-$C_i$.  For each literal $\lit$ that is unit propagated by a RUP step,
-we add the clause $[u_i \lor \lit]$, indicating that literal $\lit$
-will hold if the target constraint is falsified.  To do so for literal
-$\lit_k$, suppose that we have clauses of the form $[u_i \lor
-  \lit_{j}]$ for $1 \leq j \leq k$, and that unit propagation is based
-either on constraint $D = C_{i'}$ for $i' < i$, represented by TBDD node
-$\trust{\nodeu}_{i'}$ and denoted by literal $u_{i'}$, or based on
-constraint $D = \obar{C}_{i}$ and denoted by literal $\obar{u}_i$.
+Adding constraint $c_i$ via a sequence of RUP steps requires
+performing a series of \emph{clause generation} steps followed by a
+single step that combines these clauses into a single clausal RUP
+step.  Suppose we start with partial assignment $\assign_0 = \emptyset$
+and accumulate successive literals through unit
+propagation, such that $\assign_j = \assign_{j-1} \cup \{ \mlit_j \}$ for $1 \leq j < k$.
+For each RUP hint of the form $[d_j, \mlit_j]$, we
+justify the unit propagation of literal $\mlit_j$ based on the
+assignment
+$\assign_{j-1} \cup \{ \obar{\mlit}_{j} \}$.
+If $d_j = c_{i'}$ for some $i' < j$, calling
+$\fname{BDD\_FALSIFIES}(\nodeu_{i'}, \assign_j)$ will generate the
+clause
+$[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor  \obar{\mlit}_{j-1} \lor \mlit_j \lor \obar{u}_{i'}]$,
+and we can
+resolve this with unit clause $[u_{i'}]$ to get 
+$[\obar{\mlit}_1 \lor  \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_{j-1} \lor \mlit_j]$.  If
+$d_j = \overline{c}_i$, calling
+$\fname{BDD\_SATISFIES}(\nodeu_i, \assign_j)$
+will generate the clause
+$[\obar{\mlit}_1 \lor \obar{\mlit}_2  \lor \cdots \lor \obar{\mlit}_{k-1} \lor \mlit_k \lor u_i]$.
+The
+final RUP step has unit clause $[u_i]$ as its target, and therefore it will start with unit literal $\obar{u}_i$
+and accumulate successive literals from the hints.
+The hints will consist of the clauses generated for each RUP step.  These will propagate the literals
+$\mlit_1, \mlit_2, \ldots, \mlit_{k-1}$ in succession, and the final clause will cause a contradiction.
 
-Assignment $\assign = \{ \lit_1, \lit_2, \ldots, \lit_{k-1}, \obar{\lit}_{k} \}$
-should cause $\simplify{D}{\assign}$ to be infeasible.
-For $D = C_{i'}$, calling
-$\fname{BDD\_FALSIFIES}(\assign, \nodeu_{i'})$ will generate the clause
-$[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_{k-1} \lor \lit_k \lor \obar{u}_{i'}]$.
-Resolving this with clauses of the form $[u_i \lor \lit_{j}]$ as well as the unit clause $[u_{i'}]$
-will yield clause $[u_i \lor \lit_{k}]$.
-For $D = \obar{C}_{i}$, calling
-$\fname{BDD\_SATISFIES}(\assign, \nodeu_i)$ will generate the clause
-$[\obar{\lit}_1 \lor \obar{\lit}_2 \lor \cdots \lor \obar{\lit}_{k-1} \lor \lit_k \lor u_i]$.
-Resolving this with clauses of the form $[u_i \lor \lit_{j}]$
-will yield clause $[u_i \lor \lit_{k}]$.
-For the final step, no unit propagation occurs, and so the resolution steps will yield unit clause $[u_i]$,
-completing the validation of constraint $C_i$.
+
+\section{Optimizing for Clausal Constraints}
+
+In practice, many of the constraints encountered in PBIP proofs are of
+the form $c = \mlit_1 + \mlit_2 + \cdots + \mlit_s \geq 1$.  This is logically
+equivalent to the clause $C = [\mlit_1 \lor \mlit_2 \lor \cdots \lor  \mlit_s]$.
+For proof steps based on RUP, we can use the clausal
+representations of such constraints directly, rather than converting
+them to BDDs.
+To do so, we must include clause $C$ in the proof sequence.  If $C$ was derived by our (modified) RUP
+derivation, then it will already be part of the proof.  Otherwise, we may can invoke
+$\fname{TBDD\_MAKE\_CLAUSE}$ to add $C$ to the proof from its TBDD representation.
+Similarly, we can generate the TBDD representation of proof clause $C$ by invoking 
+$\fname{TBDD\_FROM\_CLAUSE}$.
+
+We consider two refinements to our method of converting the RUP
+derivations of PBIP into RUP derivations in the clausal proof.  First,
+suppose some RUP step of the form $[c_{i'}, \mlit]$ has $c_{i'}$
+represented as clause $C_{i'}$.  Then we can list it directly in the
+list of hints for the derivation and have the RUP checker use it for
+unit propagation.  Second, suppose the target constraint $c_i$ is
+itself clause $C_i$.  Then we can start the RUP derivation with the
+assignment $\assign_0$ consisting of the negated literals of $C_i$.
+With these optimizations, we can see that if a PBIP proof is simply a constraint
+version of a clausal RUP proof, we will generate that clausal proof.
 
 
 %%\bibliography{references}
