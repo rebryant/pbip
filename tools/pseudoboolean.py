@@ -1075,20 +1075,20 @@ class Constraint:
     def alo(self, vlist, csys):
         nnz = { i : 1 for i in vlist }
         cval = 1
-        return self.spawn(nnz, cval, csys, [self, other])
+        return self.spawn(nnz, cval, csys, [self])
 
     # Generate at-most-one constraint
     def amo(self, vlist, csys):
         nnz = { i : -1 for i in vlist }
         cval = -1
-        return self.spawn(nnz, cval, csys, [self, other])
+        return self.spawn(nnz, cval, csys, [self])
 
     # Generate at-most-zero constraint
     # (i.e., all must be false)
     def amz(self, vlist, csys):
         nnz = { i : -1 for i in vlist }
         cval = 0
-        return self.spawn(nnz, cval, csys, [self, other])
+        return self.spawn(nnz, cval, csys, [self])
 
     # Return new constraint that is logical negation of constraint
     def negate(self):
@@ -1115,6 +1115,14 @@ class Constraint:
             break
         return True
 
+    def isClause(self):
+        ncount = 0
+        for coeff in self.nnz.values():
+            if coeff == -1:
+                ncount += 1
+            elif coeff != 1:
+                return False
+        return self.cval == 1-ncount
 
 
     # Generate BDD representation
