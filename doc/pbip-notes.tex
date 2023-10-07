@@ -136,17 +136,17 @@ DRAT proof system.
 This section gives brief definitions of pseudo-Boolean constraints and their properties.
 A more extensive introduction is provided by Gocht in his PhD thesis [Gocht-Phd-2022].
 
-Consider a set of Boolean variables $X$.  For $x \in X$, {\em literal}
-$\lit$ can denote either $x$ or its negation, written $\obar{x}$.  We
-write $\obar{\lit}$ to denote $\obar{x}$ when $\lit = x$ and $x_i$ when
-$\lit = \obar{x}$.
+Consider a set of Boolean variables $X = \{x_1, x_2, \ldots, x_n \}$.  For $x_i \in X$, {\em literal}
+$\lit_i$ can denote either $x_i$ or its negation, written $\obar{x}_i$.  We
+write $\obar{\lit}_i$ to denote $\obar{x}_i$ when $\lit_i = x_i$ and $x_i$ when
+$\lit_i = \obar{x}_i$.
 
 A {\em pseudo-Boolean constraint} is a linear expression, viewing
 Boolean variables as ranging over integer values $0$ and $1$.  That
 is, 
 a \emph{relational constraint} $c$\footnote{We use lower case $c$ to denote a constraint, reserving upper case $C$ to denote a clause.}  has the form
 \begin{eqnarray}
-\sum_{1 \leq i \leq n} a_i \lit_i & \# & b \label{eqn:pbconstraint}
+a_1 \lit_1 + a_2 \lit_2 + \cdots a_n \lit_n & \#  & b \label{eqn:pbconstraint}
 \end{eqnarray}
 where:
 1) the relational operator $\#$ is $<$, $\leq$, $\geq$, or $>$,
@@ -190,7 +190,7 @@ variable-normalized form is more convenient when viewing a constraint
 as an arithmetic expression.  In this document, we focus on the logical
 aspects, giving the general form of constraint $c$ as
 \begin{eqnarray}
-\sum_{1 \leq i \leq n} a_{i} \lit_{i} & \geq & b \label{eqn:coeff-normalized}
+a_1 \lit_1 + a_2 \lit_2 + \cdots a_n \lit_n & \geq & b \label{eqn:coeff-normalized}
 \end{eqnarray}
 with each $a_{i} \geq 0$, and with $\lit_{i} = x_i$ whenever $a_i = 0$.
 
@@ -272,9 +272,9 @@ assignment $\assign$ that satisfies all of the constraints in $F$, and
 \section{(Reverse) Unit Propagation}
 
 Consider constraint $c$ in coefficient-normalized form.  Literal
-$\lit$ is {\em unit propagated} by $c$ when the assignment $\assign =
-\{ \obar{\lit} \}$ causes the constraint $\simplify{c}{\assign}$ to become
-infeasible.  As the name implies, a unit-propagated literal $\lit$ then becomes a unit constraint.
+$\lit_i$ is {\em unit propagated} by $c$ when the assignment $\assign =
+\{ \obar{\lit}_i \}$ causes the constraint $\simplify{c}{\assign}$ to become
+infeasible.  As the name implies, a unit-propagated literal $\lit_i$ then becomes a unit constraint.
 Observe that a single constraint can unit propagate
 multiple literals.  For example, $4 x_1 + 3 \obar{x}_2 + x_3 \geq 6$
 unit propagates both $x_1$ and $\obar{x}_2$.
@@ -301,7 +301,8 @@ Consider a formula $F$ consisting of a set of constraints $c_1, c_2,
       [Gocht-Phd-2022] uses unit propagation to prove that
       \emph{target constraint} $c$ can be added to a formula while
       preserving its set of satisfying assignments.  That is, any
-      assignment that satisfies $F$ also satisfies $F \land c$.  RUP
+      assignment that satisfies $F$ also satisfies $F \land c$.  
+      A RUP \emph{addition}
       justifies $c$ by assuming $\obar{c}$ holds and showing, via a
       sequence of \emph{RUP steps}, that this leads to a
       contradiction.  It accumulates a partial assignment $\assign$
@@ -329,7 +330,7 @@ $c_3$ & $x_1$ & $+$ & $2 \obar{x}_2$ & $+$ &  $3 \obar{x}_3$ & $\geq 3$ \\
 \end{tabular}
 \end{center}
 Our goal is to add the constraint $c = 2 x_1 + x_2 + x_3 \geq 2$.
-The RUP steps proceeds as follows:
+RUP addition proceeds by the following four RUP steps:
 \begin{enumerate}
 \item
 We can see that $\obar{c} = 2 \obar{x}_1 + \obar{x}_2 + \obar{x}_3 \geq 3$, and this unit propagates assignment $\assign_1 = \{ \obar{x}_1 \}$.
@@ -340,6 +341,7 @@ With this, constraint $c_1$ simplifies to $2 x_2 + \obar{x}_3 \geq 2$, and this 
 \item
   Constraint $c_3$ simplifies to $ 0 \geq 3$, which is infeasible.
 \end{enumerate}
+
 
 \section{Pseudo-Boolean Implication Proofs}
 
@@ -366,10 +368,12 @@ Constraints $c_{i}$ with $i > m$, can be added in two different ways, correspond
 \bigwedge_{c_j \in H_i} \func{c_j} & \imply & \func{c_i} \label{eqn:implicationmode}
 \end{eqnarray}
 Set $H_i$ is referred to as the {\em hint} for proof step $i$.
-\item In \emph{RUP} mode, the new constraint is justified by reverse
-  unit propagation.  A sequence of hints is provided of the form
+\item In \emph{RUP} mode, the new constraint is justified by a reverse
+  unit propagation addition.  A sequence of hints is provided defining the RUP steps.  Each hint is of the form
   $[d_1, \mlit_1], [d_2, \mlit_2], \ldots, [d_{k-1},\mlit_{k-1}], [d_k]$,
-  where each $\mlit_j$ is a unit-propagated literal, and
+  where each $\mlit_j$ is a unit-propagated literal,\footnote{Note that the indexing of these literals, e.g., $\mlit_j$ is
+  unrelated to the indexing of the variables, e.g., $x_j$.}
+ and
   $d_{j}$ is either a previous constraint $c_{i'}$ for $i' < i$, or it is the negated target constraint $\overline{c}_i$.
   The final hint $[d_k]$ should have a conflict with literals $\{\mlit_1, \mlit_2, \ldots, \mlit_{k-1} \}$.
   If a single constraint unit propagates multiple literals, these are listed as separate steps.
@@ -426,16 +430,14 @@ We assume our trusted BDD package implements the following operations
 \item[$\fname{BDD\_AND}(\nodeu, \nodev)$:] Compute BDD $\nodew$ as the conjunction of BDDs $\nodeu$ and $\nodev$.  Also generate proof steps ending with the addition of the clause $[\obar{u} \lor \obar{v} \lor w]$ proving the $(u \land v) \imply w$.
 \item[$\fname{BDD\_IMPLY}(\nodeu, \nodev)$:]
   Generate proof steps ending with the addition of the clause $[\obar{u} \lor v]$ indicating that $u \imply v$.
-\item[$\fname{BDD\_FALSIFIES}(\nodeu, \assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
-  generate proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor \obar{u}]$.
-  This clause indicates
-  that any total assignment consistent with $\assign$ will define a path in the BDD leading from root node $\nodeu$ to the leaf node representing false.
-\item[$\fname{BDD\_SATISFIES}(\nodeu, \assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
-  generate proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor u]$.
-  This clause indicates
-  that any total assignment consistent with $\assign$ will define a path in the BDD leading from root node $\nodeu$ to the leaf node representing true.
+\item[$\fname{BDD\_AND\_LITERALS}(\assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
+  generate a BDD representation $\nodeu$ of $\bigwedge_{1 \leq j \leq k} \mlit_j$ and add
+  proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor u]$.
+\item[$\fname{BDD\_NAND\_LITERALS}(\assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
+  generate a BDD representation $\nodeu$ of $\boolnot \bigwedge_{1 \leq j \leq k} \mlit_j$ and add
+  proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor \obar{u}]$.
 \item[$\fname{TBDD\_FROM\_CLAUSE}(C)$:] Generate a TBDD representation $\trust{\nodeu}$ of proof clause $C$.
-\item[$\fname{TBDD\_MAKE\_CLAUSE}(\trust{\nodeu}, C)$:]
+\item[$\fname{TBDD\_JUSTIFY\_CLAUSE}(\trust{\nodeu}, C)$:]
 This is to be called when BDD $\nodeu$ is logically equivalent to clause $C$.
 Generate a series of proof steps that culminate with the addition of $C$ to the proof.
 \end{description}
@@ -468,55 +470,66 @@ Resolving these clauses with the unit clauses for TBDDs
 $\trust{\nodeu}_{i'}$ and $\trust{\nodeu}_{i''}$
 yields the unit clause $[u_i]$.
 
-Adding constraint $c_i$ via a sequence of RUP steps requires
-performing a series of \emph{clause generation} steps followed by a
-single step that combines these clauses into a single clausal RUP
-step.  Suppose we start with partial assignment $\assign_0 = \emptyset$
+Adding constraint $c_i$ via a RUP addition requires
+performing a series of clause generations for each RUP step and then assembling the generated clauses as the hints for a single clausal RUP addition.
+Suppose we start with partial assignment $\assign_0 = \emptyset$
 and accumulate successive literals through unit
 propagation, such that $\assign_j = \assign_{j-1} \cup \{ \mlit_j \}$ for $1 \leq j < k$.
-For each RUP hint of the form $[d_j, \mlit_j]$, we
+For step $j$, the RUP hint is of the form $[d_j, \mlit_j]$.  We
 justify the unit propagation of literal $\mlit_j$ based on the
 assignment
 $\assign_{j-1} \cup \{ \obar{\mlit}_{j} \}$.
-If $d_j = c_{i'}$ for some $i' < j$, calling
-$\fname{BDD\_FALSIFIES}(\nodeu_{i'}, \assign_j)$ will generate the
-clause
-$[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor  \obar{\mlit}_{j-1} \lor \mlit_j \lor \obar{u}_{i'}]$,
-and we can
-resolve this with unit clause $[u_{i'}]$ to get 
-$[\obar{\mlit}_1 \lor  \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_{j-1} \lor \mlit_j]$.  If
+That is, when $d_j = c_{i'}$ for some $i' < i$, calling
+$\fname{BDD\_NAND\_LITERALS}(\assign_{j-1} \cup \{ \obar{\mlit}_j \})$ will generate BDD node $\nodev$
+as well as proof clause
+$[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor  \obar{\mlit}_{j-1} \lor \mlit_j \lor \obar{v}]$,
+and then calling $\fname{BDD\_IMPLY}(\nodeu_{i'}, \nodev)$
+  will generate the proof clause $[\obar{u}_{i'} \lor v]$.  Resolving these two clauses, along with unit clause $[u_{i'}]$
+yields proof clause
+$H_j = [\obar{\mlit}_1 \lor  \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_{j-1} \lor \mlit_j]$.
+  Similarly, when
 $d_j = \overline{c}_i$, calling
-$\fname{BDD\_SATISFIES}(\nodeu_i, \assign_j)$
-will generate the clause
-$[\obar{\mlit}_1 \lor \obar{\mlit}_2  \lor \cdots \lor \obar{\mlit}_{k-1} \lor \mlit_k \lor u_i]$.
+$\fname{BDD\_AND\_LITERALS}(\assign_{j-1} \cup \{ \obar{\mlit}_j \})$ will generate BDD node $\nodev$
+as well as proof clause
+$[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor  \obar{\mlit}_{j-1} \lor \mlit_j \lor v]$,
+and then calling $\fname{BDD\_IMPLY}(\nodev, \nodeu_i)$
+  will generate the proof clause $[\obar{v} \lor u_i]$.  Resolving these two clauses
+yields proof clause
+$H_j = [\obar{\mlit}_1 \lor  \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_{j-1} \lor \mlit_j \lor u_i]$.
+The final RUP step will not involve any unit propagations.  It will generate either proof clause
+$H_k = [\obar{\mlit}_1 \lor  \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_{k-1}]$ or proof clause
+$H_k = [\obar{\mlit}_1 \lor  \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_{k-1} \lor u_i]$.
 The
-final RUP step has unit clause $[u_i]$ as its target, and therefore it will start with unit literal $\obar{u}_i$
-and accumulate successive literals from the hints.
-The hints will consist of the clauses generated for each RUP step.  These will propagate the literals
-$\mlit_1, \mlit_2, \ldots, \mlit_{k-1}$ in succession, and the final clause will cause a contradiction.
-
+final clausal RUP addition has unit clause $[u_i]$ as its target
+and the clauses $H_1, H_2, \ldots, H_k$ as its hints.
+RUP addition will start with unit literal $\obar{u}_i$ and accumulate the literals 
+$\mlit_1, \mlit_2, \ldots, \mlit_{k-1}$ as unit literals from the hints.
+The final clause will cause a conflict.
 
 \section{Optimizing for Clausal Constraints}
 
 In practice, many of the constraints encountered in PBIP proofs are of
-the form $c = \mlit_1 + \mlit_2 + \cdots + \mlit_s \geq 1$.  This is logically
-equivalent to the clause $C = [\mlit_1 \lor \mlit_2 \lor \cdots \lor  \mlit_s]$.
-For proof steps based on RUP, we can use the clausal
-representations of such constraints directly, rather than converting
+the form $c = \mlit_1 + \mlit_2 + \cdots + \mlit_k \geq 1$.  This is logically
+equivalent to the clause $C = [\mlit_1 \lor \mlit_2 \lor \cdots \lor  \mlit_k]$.
+We can convert PBIP RUP additions into clausal proofs
+using such constraints directly, rather than converting
 them to BDDs.
-To do so, we must include clause $C$ in the proof sequence.  If $C$ was derived by our (modified) RUP
-derivation, then it will already be part of the proof.  Otherwise, we may can invoke
-$\fname{TBDD\_MAKE\_CLAUSE}$ to add $C$ to the proof from its TBDD representation.
-Similarly, we can generate the TBDD representation of proof clause $C$ by invoking 
+To do so, clause $C$ must occur in the proof.  If $C$ was derived by our (modified) RUP
+derivation, then it will already be part of the proof.  Otherwise, we can invoke
+$\fname{TBDD\_JUSTIFY\_CLAUSE}$ to add $C$ to the proof from its TBDD representation.
+Similarly, if proof clause $C$ is later needed as part of the hint for an implication-mode addition
+we can generate its TBDD representation
 $\fname{TBDD\_FROM\_CLAUSE}$.
 
 We consider two refinements to our method of converting the RUP
 derivations of PBIP into RUP derivations in the clausal proof.  First,
-suppose some RUP step of the form $[c_{i'}, \mlit]$ has $c_{i'}$
-represented as clause $C_{i'}$.  Then we can list it directly in the
-list of hints for the derivation and have the RUP checker use it for
+suppose some RUP step $[d_j, \mlit_j]$ has $d_j = c_{i'}$, and constraint $c_{i'}$ is
+represented as clause $C_{i'}$.  Then we can let $H_j = c_{i'}$
+and have the RUP checker use it for
 unit propagation.  Second, suppose the target constraint $c_i$ is
-itself clause $C_i$.  Then we can start the RUP derivation with the
+itself clause $C_i$.  Then final clausal RUP addition can have $C$ as its target,
+and we can build the hint sequence $H_1, H_2, \ldots, H_k$
+by starting with
 assignment $\assign_0$ consisting of the negated literals of $C_i$.
 With these optimizations, we can see that if a PBIP proof is simply a constraint
 version of a clausal RUP proof, we will generate that clausal proof.
