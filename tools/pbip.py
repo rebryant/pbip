@@ -25,6 +25,74 @@ def uncomment(s):
         s = s[1:]
     return s
 
+# Divide string into tokens, where open and close brackets are separate tokens
+def tokenize(s):
+    result = []
+    tok = ""
+    for c in s:
+        if c in " \t":
+            if tok != "":
+                result.append(tok)
+                tok = ""
+        elif c in "[]":
+            if tok != "":
+                result.append(tok)
+                tok = ""
+            result.append(c)
+        else:
+            tok += c
+    if tok != "":
+        result.append(tok)
+    return result
+        
+  
+
+# Convert string of tokens into nested list of integers based on bracket structure
+def listify(s, maxdepth = None, mindepth = None):
+    tokens = tokenize(s)
+    active = [[]]
+    for tok in tokens:
+        if tok == '[':
+            if maxdepth is not None and len(active) >= maxdepth:
+                msg = "Nesting is too deep"
+                return (msg, None)
+            active.append([])
+        elif tok == ']':
+            if len(active) < 2:
+                msg = "Mismatched brackets.  Unexpected ']'"
+                return (msg, None)
+            active[-2].append(active[-1])
+            active = active[:-1]
+        elif mindepth is not None and len(active) < mindepth:
+            msg = "Trying to append token '%s' at invalid depth" % tok
+            return (msg, None)
+        else:
+            try:
+                val = int(tok)
+            except:
+                msg = "Token %s not integer" % tok
+                return (msg, None)
+            active[-1].append(val)
+    if len(active) > 1:
+        msg = "Mismatched brackets.  Not enough ']' brackets"
+        return (msg, None)
+    return ("", active[0])
+        
+def pairlists(s):
+    msg, ols = listify(s, 2, 2)
+    if ols is None:
+        return msg, ols
+    # Split multiple-literal sublists into singles
+    ls = []
+    for sls in ols:
+        if len(sls) <= 2:
+            ls.append(sls)
+        else:
+            head = sls[0]
+            for lit in sls[1:]:
+                ls.append([head, lit])
+    return msg, ls
+
 # Return list of constraints from line of OPB
 class PbipException(Exception):
     form = ""
@@ -149,7 +217,7 @@ class PbipReader:
                 comlist.append(uncomment(line))
                 continue
             command = line[0]
-            if command not in ['i', 'a', 'k', 'A']:
+            if command not in ['i', 'a', 'u']:
                 raise PbipException("", "File %s Line %d: Invalid command '%s'" % (self.fname, self.lineCount, command))
             cline  = trim(line[1:])
             pos = cline.find(';')
@@ -161,12 +229,18 @@ class PbipReader:
                 clist = parseOpb(cstring)
             except PbipException as ex:
                 raise PbipException("", "File %s Line %d: %s" % (self.fname, self.lineCount, str(ex)))
-            hfields = hstring.split()
-            try:
-                hlist = [int(f) for f in hfields]
-            except:
-                raise PbipException("", "File %s Line %d: Couldn't parse hint list '%s'" % (self.fname, self.lineCount, hstring))
-            break
+            if command in ['i', 'a']:
+                hfields = hstring.split()
+                try:
+                    hlist = [int(f) for f in hfields]
+                except:
+                    raise PbipException("", "File %s Line %d: Couldn't parse hint list '%s'" % (self.fname, self.lineCount, hstring))
+                break
+            else:
+                msg, hlist = pairlists(hstring)
+                if hlist is None:
+                    raise PbipException("", "File %s Line %d: Couldn't parse hint list '%s' (%s)" % (self.fname, self.lineCount, hstring, msg))
+                break
         if self.verbLevel >= 3:
             print("PBIP: Read PBIP line #%d.  Command = %s" % (self.lineCount, command))
             print("PBIP:  Constraints:")
@@ -177,13 +251,7 @@ class PbipReader:
         return (command, clist, hlist, comlist)
 
 class StepType:
-    input, assertion, oldCF, currentCF, currentTarget = range(5)
-
-    def implicationOK(self, st):
-        return st in [self.input, self.assertion]
-
-    def cfImplicationOK(self, st):
-        return st in [self.input, self.assertion, self.currentCF]
+    input, assertion, rup = range(3)
 
 class Pbip:
     verbLevel = 1
@@ -197,17 +265,9 @@ class Pbip:
     constraintList = []
     # Trusted BDD representations of constraints
     # Each TBDD is pair (root, validation)
-
-    # BDDs for counterfactual assertions are for negation of constraint
-    # and their validation is of the form u ==> u_T, were u_T is the
-    # extension variable for the target constraint
     tbddList = []
     # Each constraint carries a type that determines how it can be used as a hint
     stepTypeList = []
-    # Verifier can work in either implication or counterfactual mode
-    counterfactualMode = False
-    # When in counterfactual mode, keep track of target root
-    targetId = None
     maxBddSize = 0
     maxCoefficient = 0
 
@@ -226,8 +286,6 @@ class Pbip:
         self.constraintList = []
         self.tbddList = []
         self.stepTypeList = []
-        self.counterfactualMode = False
-        self.targetId = None
         lratName = None if lratName == "" else lratName
         self.prover = solver.Prover(fname=lratName, writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = True)
         # Print input clauses
@@ -257,40 +315,17 @@ class Pbip:
         if command == '':
             return True
         st = None
-        nclist = clist
-        negated = False
 
-        # Little hack.  Dynamically change command from 'A' to 'a' if all hints are acceptable as implication mode hints
-        if command == 'A' and self.assertionHintsOk(hlist):
-            command = 'a'
-            if (self.verbLevel >= 1):
-                pid = len(self.constraintList) + 1
-                print("WARNING: Converting command type of #%d from 'A' to 'a'" % pid)
+        for con in clist:
+            con.buildBdd(self)
+        st = StepType.assertion if command == 'a' else StepType.rup if command == 'u' else StepType.input
 
-        if command in ['a', 'i']:
-            for con in clist:
-                con.buildBdd(self)
-            st = StepType.assertion if command == 'a' else StepType.input
-        elif command == 'k':
-            if self.counterfactualMode:
-                raise PbipException("", "Can't have command of type '%s' while already in counterfactual mode" % command)
-            for con in clist:
-                con.buildBdd(self)
-            st = StepType.currentTarget
-        elif command == 'A':
-            if not self.counterfactualMode:
-                raise PbipException("", "Can't have command of type '%s' when in implication mode" % command)
-            nclist = [con.negate() for con in clist]
-            for ncon in nclist:
-                ncon.buildBdd(self)
-            negated = True
-            st = StepType.currentCF
-        self.constraintList.append(nclist)
+        self.constraintList.append(clist)
         self.stepTypeList.append(st)
-        if len(nclist) == 2:
-            nroot = self.manager.applyOr(nclist[0].root, nclist[1].root) if negated else self.manager.applyAnd(nclist[0].root, nclist[1].root)
+        if len(clist) == 2:
+            nroot = self.manager.applyAnd(nclist[0].root, nclist[1].root)
         else:
-            nroot = nclist[0].root
+            nroot = clist[0].root
         self.tbddList.append((nroot,None))
         self.maxBddSize = max(self.maxBddSize, self.manager.getSize(nroot))
         pid = len(self.constraintList)
@@ -303,10 +338,9 @@ class Pbip:
         elif command == 'a':
             self.doAssertion(pid, hlist)
             done = nroot == self.manager.leaf0
-        elif command == 'k':
-            self.doTarget(pid, hlist)
-        elif command == 'A':
-            self.doCfAssertion(pid, hlist)
+        elif command == 'u':
+            self.doRup(pid, hlist)
+            done = nroot == self.manager.leaf0
         else:
             raise PbipException("", "Unexpected command '%s'" % command)
         return done
@@ -446,19 +480,15 @@ class Pbip:
         root = self.tbddList[pid-1][0]
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP assertion #%d.  Hints = %s" % (pid, str(hlist)))
-        antecedents = []
+        unitLterals = []
         hok = True
-        if len(hlist) not in [1,2]:
-            print("PBIP ERROR: Step #%d.  Assertion must have one or two hints" % pid)
+        if len(hlist) == 0:
+            print("PBIP ERROR: Step #%d.  RUP must have at least one hint" % pid)
             hok = False
         else:
             for hid in hlist:
                 if hid < 1 or hid > len(self.tbddList):
                     print("PBIP ERROR: Step #%d.  Hint %d out of range" % (pid, hid))
-                    hok = False
-                ht = self.stepTypeList[hid-1]
-                if not StepType().implicationOK(ht):
-                    print("PBIP ERROR: Step #%d.  Hint %d cannot be used for implication-mode assertion" % (pid, hid))
                     hok = False
         if not hok:
             self.valid = False
@@ -490,128 +520,12 @@ class Pbip:
                 print("PBIP: Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
                 self.prover.comment("Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
 
-    def doTarget(self, pid, hlist):
-        if len(hlist) > 0:
-            print("PBIP ERROR: Step #%d.  Cannot have hints with target declaration" % (pid))
-        self.counterfactualMode = True
-        self.targetId = pid
-        # Temporary validation is tautology
+    def doRup(self, pid, hlist):
         root = self.tbddList[pid-1][0]
-        self.tbddList[pid-1] = (root, resolver.tautologyId)
         if self.verbLevel >= 2:
-            self.prover.comment("PBIP: Processed PBIP target declaration #%d.  Root %s" % (pid, root.label()))
-            print("PBIP: Processed PBIP target declaration #%d.  Root %s" % (pid, root.label()))
+            self.prover.comment("Processing PBIP rup line #%d.  Hints = %s" % (pid, str(hlist)))
+        print("PBIP: Processing RUP line #%d.  Root = %s.  Hints = %s" % (pid, root.label(), str(hlist)))
 
-    def doCfAssertion(self, pid, hlist):
-        # Mark which hints are implications and which are counterfactual
-        isImplication = []
-        root = self.tbddList[pid-1][0]
-        if self.verbLevel >= 2:
-            self.prover.comment("Processing PBIP counterfactual assertion #%d.  Hints = %s" % (pid, str(hlist)))
-        antecedents = []
-        hok = True
-        if len(hlist) not in [1,2]:
-            print("PBIP ERROR: Step #%d.  Counterfactual assertion must have one or two hints" % pid)
-            hok = False
-        else:
-            for hid in hlist:
-                if hid < 0:
-                    hid = abs(hid)
-                    if hid > len(self.tbddList):
-                        print("PBIP ERROR: Step #%d.  Hint %d out of range" % (pid, hid))
-                        hok = False
-                    else:
-                        ht = self.stepTypeList[hid-1]
-                        if ht != StepType().currentTarget:
-                            print("PBIP ERROR: Step #%d.  Negated hint -%d must be for current target" % (pid, hid))
-                            hok = False
-                    isImplication.append(False)
-                elif hid < 1 or hid > len(self.tbddList):
-                    print("PBIP ERROR: Step #%d.  Hint %d out of range" % (pid, hid))
-                    hok = False
-                else:
-                    ht = self.stepTypeList[hid-1]
-                    if not StepType().cfImplicationOK(ht):
-                        print("PBIP ERROR: Step #%d.  Hint %d cannot be used for counterfactual-mode assertion" % (pid, hid))
-                        hok = False
-                    isImplication.append(StepType().implicationOK(ht))
-        if not hok:
-            self.valid = False
-        elif len(hlist) == 1:
-            if isImplication[0]:
-                print("PBIP ERROR: Step #%d.  Cannot have implication assertion %d as only hint for counterfactual assertion" % (pid, hlist[0]))
-                self.valid = False
-            else:
-                (r1,v1) = self.tbddList[abs(hlist[0])-1]
-                (ok, implication) = self.manager.justifyImply(root, r1)
-                if not ok:
-                    print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
-                    self.valid = False
-                else:
-                    antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
-        else:
-            (r1,v1) = self.tbddList[abs(hlist[0])-1]
-            (r2,v2) = self.tbddList[abs(hlist[1])-1]
-            if isImplication[0]:
-                if isImplication[1]:
-                    print("PBIP ERROR.  Step #%d.  Cannot have both hints be implication assertions" % pid)
-                    self.valid = False
-                else:
-                    (ok, implication) = self.manager.applyAndJustifyImply(r1, root, r2)
-                    if not ok:
-                        print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d (implication) and #%d (counterfactual)" % (pid, hlist[0], hlist[1]))
-                        self.valid = False
-                    else:
-                        antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
-            else:
-                if isImplication[1]:
-                    (ok, implication) = self.manager.applyAndJustifyImply(r2, root, r1)
-                    if not ok:
-                        print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d (counterfactual) and #%d (implication)" % (pid, hlist[0], hlist[1]))
-                        self.valid = False
-                    else:
-                        antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
-                else:
-                    (orRoot, orImplication) = self.manager.applyOrJustify(r1, r2)
-                    if orImplication is None:
-                        orImplication = resolver.tautologyId
-                        implication = resolver.tautologyId
-                    else:
-                        (ok, implication) = self.manager.justifyImply(root, orRoot)
-                        if not ok:
-                            print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d (counterfactual) and #%d (counterfactual)" % (pid, hlist[0], hlist[1]))
-                            self.valid = False
-                        else:
-                            antecedents = [cid for cid in [v1, v2, orImplication, implication] if cid != resolver.tautologyId]
-        
-        if not self.valid:
-            return
-        comment = "Justification of counterfactual assertion #%d" % pid
-        targetRoot = self.tbddList[self.targetId-1][0]
-        if root == self.manager.leaf1:
-            pclause = [targetRoot.id]
-        else:
-            pclause = [-root.id, targetRoot.id]
-        cid = self.prover.createClause(pclause, antecedents, comment)
-        self.tbddList[pid-1] = (root, cid)
-        if self.verbLevel >= 2:
-            if root == self.manager.leaf1:
-                print("PBIP: Processed PBIP counterfactual assertion #%d.  Completed proof by contradiction" % pid)
-                self.prover.comment("Processed PBIP counterfactual assertion #%d.  Completed proof by contradiction" % pid)
-            else:
-                print("PBIP: Processed PBIP counterfactual assertion #%d.  Root %s Implication #%d [-%d %d]" % (pid, root.label(), cid, root.id, targetRoot.id))
-                self.prover.comment("Processed PBIP counterfactual assertion #%d.  Root %s Implication #%d [-%d %d]" % (pid, root.label(), cid, root.id, targetRoot.id))
-        if root == self.manager.leaf1:
-            # Counterfactual proof completed.
-            # Relabel step types
-            rpid = pid
-            while rpid > self.targetId:
-                self.stepTypeList[rpid-1] = StepType().oldCF
-                rpid -= 1
-            self.stepTypeList[self.targetId-1] = StepType().assertion
-            self.tbddList[self.targetId-1] = (targetRoot, cid)
-            self.targetId = None
-            self.counterfactualMode = False
             
     def run(self):
         while not self.doStep():
