@@ -430,16 +430,13 @@ We assume our trusted BDD package implements the following operations
 \item[$\fname{BDD\_AND}(\nodeu, \nodev)$:] Compute BDD $\nodew$ as the conjunction of BDDs $\nodeu$ and $\nodev$.  Also generate proof steps ending with the addition of the clause $[\obar{u} \lor \obar{v} \lor w]$ proving the $(u \land v) \imply w$.
 \item[$\fname{BDD\_IMPLY}(\nodeu, \nodev)$:]
   Generate proof steps ending with the addition of the clause $[\obar{u} \lor v]$ indicating that $u \imply v$.
-\item[$\fname{BDD\_AND\_LITERALS}(\assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
+\item[$\fname{BDD\_AND\_LITERALS}(L)$:] For a set of literals $L = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
   generate a BDD representation $\nodeu$ of $\bigwedge_{1 \leq j \leq k} \mlit_j$ and add
-  proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor u]$.
-\item[$\fname{BDD\_NAND\_LITERALS}(\assign)$:] For (possibly partial) assignment $\assign = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
-  generate a BDD representation $\nodeu$ of $\boolnot \bigwedge_{1 \leq j \leq k} \mlit_j$ and add
-  proof steps ending with the addition of the clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor \obar{u}]$.
+  clause $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor \obar{\mlit}_k \lor u]$ to the proof.
+\item[$\fname{BDD\_OR\_LITERALS}(L)$:] For a set of literals $L = \{\mlit_1, \mlit_2, \ldots, \mlit_k\}$
+  generate a BDD representation $\nodeu$ of $\bigvee_{1 \leq j \leq k} \mlit_j$ and add
+  clause $[\mlit_1 \lor \mlit_2 \lor \cdots \lor \mlit_k \lor \obar{u}]$ to the proof.
 \item[$\fname{TBDD\_FROM\_CLAUSE}(C)$:] Generate a TBDD representation $\trust{\nodeu}$ of proof clause $C$.
-\item[$\fname{TBDD\_JUSTIFY\_CLAUSE}(\trust{\nodeu}, C)$:]
-This is to be called when BDD $\nodeu$ is logically equivalent to clause $C$.
-Generate a series of proof steps that culminate with the addition of $C$ to the proof.
 \end{description}
 
 Our goal is the create a TBDD representation $\trust{\nodeu}_i$ for
@@ -480,7 +477,7 @@ justify the unit propagation of literal $\mlit_j$ based on the
 assignment
 $\assign_{j-1} \cup \{ \obar{\mlit}_{j} \}$.
 That is, when $d_j = c_{i'}$ for some $i' < i$, calling
-$\fname{BDD\_NAND\_LITERALS}(\assign_{j-1} \cup \{ \obar{\mlit}_j \})$ will generate BDD node $\nodev$
+$\fname{BDD\_OR\_LITERALS}(\{ \obar{\lit} | \lit \in \assign_{j-1} \} \cup \{ \mlit_j \})$ will generate BDD node $\nodev$
 as well as proof clause
 $[\obar{\mlit}_1 \lor \obar{\mlit}_2 \lor \cdots \lor  \obar{\mlit}_{j-1} \lor \mlit_j \lor \obar{v}]$,
 and then calling $\fname{BDD\_IMPLY}(\nodeu_{i'}, \nodev)$
@@ -515,11 +512,13 @@ We can convert PBIP RUP additions into clausal proofs
 using such constraints directly, rather than converting
 them to BDDs.
 To do so, clause $C$ must occur in the proof.  If $C$ was derived by our (modified) RUP
-derivation, then it will already be part of the proof.  Otherwise, we can invoke
-$\fname{TBDD\_JUSTIFY\_CLAUSE}$ to add $C$ to the proof from its TBDD representation.
-Similarly, if proof clause $C$ is later needed as part of the hint for an implication-mode addition
-we can generate its TBDD representation
-$\fname{TBDD\_FROM\_CLAUSE}$.
+derivation, then it will already be part of the proof.  Otherwise, for a constraint represented by $\trust{\nodeu}$
+invoking 
+$\fname{BDD\_OR\_LITERALS}(C)$ should return node $\nodeu$ as the result, and we can resolve the generated proof clause with unit clause $[u]$
+to get $C$ added as a proof clause.
+On the other hand, if proof clause $C$ is later needed as part of the hint for an implication-mode addition
+we can generate its TBDD representation $\trust{\nodeu}$ with
+$\fname{TBDD\_FROM\_CLAUSE}(C)$.
 
 We consider two refinements to our method of converting the RUP
 derivations of PBIP into RUP derivations in the clausal proof.  First,
