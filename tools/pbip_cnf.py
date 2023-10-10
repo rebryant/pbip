@@ -118,7 +118,13 @@ class PbipWriter(Writer):
         self.show("* " + line)
 
     def doCommand(self, cmd, opbstring, hints):
-        shints = [str(hint) for hint in hints]
+        shints = []
+        for hint in hints:
+            if type(hint) == type([0]):
+                shint = '[' + " ".join([str(h) for h in hint]) + ']'
+            else:
+                shint = str(hint)
+            shints.append(shint)
         self.show("%s %s ; %s" % (cmd, opbstring, " ".join(shints)))
 
     def doInput(self, opbstring, hints):
@@ -192,13 +198,19 @@ class CnfGenerator:
         for com in comments:
             self.pwriter.doComment(com)
         if cmd == 'i':
-            for con in clist:
-                con.buildBdd(self)
+            clauses = None
             if len(clist) == 1:
-                root = clist[0].root
-            else:
-                root = self.manager.applyAnd(clist[0].root, clist[1].root)
-            clauses = self.manager.generateClauses(root, up=False)
+                tclause = clist[0].getClause()
+                if tclause is not None:
+                    clauses = [tclause]
+            if clauses is None:
+                for con in clist:
+                    con.buildBdd(self)
+                if len(clist) == 1:
+                    root = clist[0].root
+                else:
+                    root = self.manager.applyAnd(clist[0].root, clist[1].root)
+                clauses = self.manager.generateClauses(root, up=False)
             hlist = []
             for clause in clauses:
                 id = self.cwriter.doClause(clause)

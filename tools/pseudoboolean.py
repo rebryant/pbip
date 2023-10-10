@@ -1100,7 +1100,7 @@ class Constraint:
     def isAlo(self):
         if self.cval != 1:
             return False
-        for coeff in self.nnz.values():
+        for coeff in self.nz.values():
             if coeff != 1:
                 return False
             break
@@ -1109,21 +1109,25 @@ class Constraint:
     def isAmo(self):
         if self.cval != -1:
             return False
-        for coeff in self.nnz.values():
+        for coeff in self.nz.values():
             if coeff != -1:
                 return False
             break
         return True
 
-    def isClause(self):
+    # Detect whether clause.  If so, return list of literals
+    # If not, return None
+    def getClause(self):
         ncount = 0
-        for coeff in self.nnz.values():
+        lits = []
+        for var in self.nz.keys():
+            coeff = self.nz[var]
             if coeff == -1:
                 ncount += 1
             elif coeff != 1:
-                return False
-        return self.cval == 1-ncount
-
+                return None
+            lits.append(coeff * var)
+        return lits if self.cval == 1-ncount else None
 
     # Generate BDD representation
     def buildBdd(self, csys):
