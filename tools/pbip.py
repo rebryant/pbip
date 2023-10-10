@@ -483,7 +483,7 @@ class Pbip:
         unitLterals = []
         hok = True
         if len(hlist) == 0:
-            print("PBIP ERROR: Step #%d.  RUP must have at least one hint" % pid)
+            print("PBIP ERROR: Step #%d.  Must have at least one hint" % pid)
             hok = False
         else:
             for hid in hlist:
@@ -525,7 +525,54 @@ class Pbip:
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP rup line #%d.  Hints = %s" % (pid, str(hlist)))
         print("PBIP: Processing RUP line #%d.  Root = %s.  Hints = %s" % (pid, root.label(), str(hlist)))
+        # Build up antecedents for final RUP addition
+        finalAntecedents = []
+        litList = []
+        for hint in hlist:
+            aid = hint[0]
+            alit = hint[1] if len(hint) == 2 else None
+            stepAntecedents = []
+            stepClause = []
+            if aid < pid:
+                (ar,av) = self.tbddList[aid-1]
+                propArgs = [-lit for lit in litList]
+                if alit is not None:
+                    propArgs += [alit]
+                (vroot,vid) = self.manager.constructOr(propArgs, self.litMap)
+                stepAntecedents = [av, vid]
+                (uroot,uid) = self.manager.justifyImply(ar,vroot)
+                if uid != resolver.tautologyId:
+                    stepAntecedents.append(uid)
+                stepClause = propArgs
+            else:
+                propArgs = list(litList)
+                if alit is not None:
+                    propArgs += [-alit]
+                (vroot,vid) = self.manager.constructAnd(propArgs, self.litMap)
+                stepAntecedents = [vid]
+                (uroot,uid) = self.manager.justifyImply(vroot,root)
+                if uid != resolver.tautologyId:
+                    stepAntecedents.append(uid)
+                stepClause = [-lit for lit in propArgs] + [root.id]
+            # Generate proof for step
+            comment = "Justification of step in RUP addition #%d.  Hint = %s" % (pid, str(hint))
+            scid = self.prover.createClause(stepClause, stepAntecedents, comment)
+            finalAntecedents.append(scid)
+            if alit is not None:
+                litList.append(alit)
+            if self.verbLevel >= 3:
+                print("PBIP: Processing RUP addition #%d step.  Hint = %s.  Generated clause #%d" % (pid, str(hint), scid))
 
+        comment = "Justification of RUP addition #%d" % pid
+        cid = self.prover.createClause([root.id], finalAntecedents, comment)
+        self.tbddList[pid-1] = (root, cid)
+        if self.verbLevel >= 2:
+            if root.id == -resolver.tautologyId:
+                print("PBIP: Processed PBIP RUP addition #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
+                self.prover.comment("Processed PBIP RUP addition #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
+            else:
+                print("PBIP: Processed PBIP RUP addition #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
+                self.prover.comment("Processed PBIP RUP addition #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
             
     def run(self):
         while not self.doStep():

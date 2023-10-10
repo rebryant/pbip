@@ -390,12 +390,22 @@ class Manager:
         lits = sorted(literalList, key=lambda n: -n.variable.level)
         return self.reduceList(lits, self.applyOr, self.leaf0)
 
+    def deconstructClauseBDD(self, root):
+        litNodes = []
+        while not root.isLeaf():
+            positive = root.high == self.leaf1
+            litNodes.append(root)
+            root = root.low if positive else root.high
+        return litNodes
+
+    # Generate BDD for disjunction of literals
+    # and generate unit clause for root
     def constructClause(self, clauseId, literalList):
         root = self.buildClause(literalList)
-        lits = self.deconstructClause(root)
+        litNodes = self.deconstructClauseBDD(root)
         # List antecedents in reverse order of resolution steps
         antecedents = []
-        for node in lits:
+        for node in litNodes:
             positive = node.high == self.leaf1
             if positive:
                 antecedents.append(node.idHU())
@@ -409,13 +419,63 @@ class Manager:
         validation = self.prover.createClause([root.id], antecedents, "Validate BDD representation of clause %d" % clauseId)
         return root, validation
     
-    def deconstructClause(self, clause):
-        lits = []
-        while not clause.isLeaf():
-            positive = clause.high == self.leaf1
-            lits.append(clause)
-            clause = clause.low if positive else clause.high
-        return lits
+    # Create BDD representation of disjunction of literals and add implication clause for root
+    def constructOr(self, integerLiterals, literalDict):
+        literalList = [literalDict[lit] for lit in integerLiterals]
+        root = self.buildClause(literalList)
+        litNodes = self.deconstructClauseBDD(root)
+        # List antecedents in reverse order of resolution steps
+        antecedents = []
+        for node in litNodes:
+            positive = node.high == self.leaf1
+            if positive:
+                antecedents.append(node.idLD())
+            else:
+                antecedents.append(node.idHD())
+        if len(antecedents) == 1:
+            validation = antecedents[0]
+        else:
+            pclause = integerLiterals + [-root.id]
+            validation = self.prover.createClause(pclause, antecedents, "Create BDD for disjunction of literals %s" % (str(integerLiterals)))
+        if self.verbLevel >= 4:
+            print("PBIP: BDD for OR of literals %s has root %s.  Validation clause Id %d" % (str(integerLiterals), root.label(), validation))
+        return root, validation
+        
+    def buildConjunction(self, literalList):
+        lits = sorted(literalList, key=lambda n: -n.variable.level)
+        return self.reduceList(lits, self.applyAnd, self.leaf1)
+
+    def deconstructConjunctionBDD(self, root):
+        litNodes = []
+        while not root.isLeaf():
+            positive = root.high == self.leaf0
+            litNodes.append(root)
+            root = root.low if positive else root.high
+        return litNodes
+
+    # Create BDD representation of conjunction of literals and add implication clause for root
+    def constructAnd(self, integerLiterals, literalDict):
+        literalList = [literalDict[lit] for lit in integerLiterals]
+        root = self.buildConjunction(literalList)
+        litNodes = self.deconstructConjunctionBDD(root)
+        # List antecedents in reverse order of resolution steps
+        antecedents = []
+        for node in litNodes:
+            positive = node.low == self.leaf0
+            if positive:
+                antecedents.append(node.idHU())
+            else:
+                antecedents.append(node.idLU())
+        if len(antecedents) == 1:
+            validation = antecedents[0]
+        else:
+            pclause = [-lit for lit in integerLiterals] + [root.id]
+            validation = self.prover.createClause(pclause, antecedents, "Create BDD for conjunction of literals %s" % (str(integerLiterals)))
+        if self.verbLevel >= 4:
+            print("PBIP: BDD for AND of literals %s has root %s.  Validation clause Id %d" % (str(integerLiterals), root.label(), validation))
+        return root, validation
+
+
 
     # Build dictionary mapping nodes in DAG rooted by node to values
     # nodeFunction should be a function mapping a node to a value
