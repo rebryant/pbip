@@ -250,9 +250,6 @@ class PbipReader:
                 print("PBIP:   Hints: %s" % str(hlist))
         return (command, clist, hlist, comlist)
 
-class StepType:
-    input, assertion, rup = range(3)
-
 class Pbip:
     verbLevel = 1
     bddOnly = False
@@ -271,7 +268,6 @@ class Pbip:
     # Pair of form (literalList, clauseId).  Both can be None
     # Each constraint carries a type that determines how it can be used as a hint
     tclauseList = []
-    stepTypeList = []
     maxBddSize = 0
     maxCoefficient = 0
 
@@ -290,7 +286,6 @@ class Pbip:
         self.preader = PbipReader(pbipName, verbLevel)
         self.constraintList = []
         self.tbddList = []
-        self.stepTypeList = []
         lratName = None if lratName == "" else lratName
         self.prover = solver.Prover(fname=lratName, writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = True)
         # Print input clauses
@@ -320,13 +315,9 @@ class Pbip:
         if command == '':
             return True
         st = None
-
         for con in clist:
             con.buildBdd(self)
-        st = StepType.assertion if command == 'a' else StepType.rup if command == 'u' else StepType.input
-
         self.constraintList.append(clist)
-        self.stepTypeList.append(st)
         if len(clist) == 2:
             nroot = self.manager.applyAnd(nclist[0].root, nclist[1].root)
         else:
@@ -476,16 +467,6 @@ class Pbip:
             else:
                 print("PBIP: Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
                 self.prover.comment("Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
-
-      
-    def assertionHintsOk(self, hlist):
-        for hid in hlist:
-            if hid < 1 or hid > len(self.tbddList):
-                return False
-            ht = self.stepTypeList[hid-1]
-            if not StepType().implicationOK(ht):
-                return False
-        return True
 
 
     def doAssertion(self, pid, hlist):
