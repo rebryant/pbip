@@ -310,31 +310,42 @@ class Pbip:
 
     def doStep(self):
         command, clist, hlist, comlist = self.preader.readLine()
+
+        # Special handling of input constraints represented by single clauses
+        tclause = None
+        tcid = None
+        clauseOnly = False
+        if not self.bddOnly and len(clist) == 1:
+            tclause = clist[0].getClause()
+            if tclause is not None and command == 'i' and len(hlist) == 1:
+                # Won't generate BDD representation until needed
+                tcid = hlist[0]
+                clauseOnly = True
+        self.tclauseList.append((tclause, tcid))
         for con in clist:
             self.maxCoefficient = max(self.maxCoefficient, con.maxCoefficient())
         if command == '':
             return True
-        st = None
-        for con in clist:
-            con.buildBdd(self)
+        if not clauseOnly:
+            for con in clist:
+                con.buildBdd(self)
         self.constraintList.append(clist)
         if len(clist) == 2:
             nroot = self.manager.applyAnd(nclist[0].root, nclist[1].root)
+        elif clauseOnly:
+            nroot = None
         else:
             nroot = clist[0].root
         self.tbddList.append((nroot,None))
-        tclause = None
-        if not self.bddOnly and len(clist) == 1:
-            tclause = clist[0].getClause()
-        self.tclauseList.append((tclause, None))
-        self.maxBddSize = max(self.maxBddSize, self.manager.getSize(nroot))
+        if nroot is not None:
+            self.maxBddSize = max(self.maxBddSize, self.manager.getSize(nroot))
         pid = len(self.constraintList)
         done = False
         for com in comlist:
             self.prover.comment(com)
         if command == 'i':
             self.doInput(pid, hlist)
-            done = nroot == self.manager.leaf0
+            done = nroot is not None and nroot == self.manager.leaf0
         elif command == 'a':
             self.doAssertion(pid, hlist)
             done = nroot == self.manager.leaf0
@@ -345,6 +356,12 @@ class Pbip:
             raise PbipException("", "Unexpected command '%s'" % command)
         return done
         
+    def needTbdd(self, pid):
+        if self.tbddList[pid-1][0] is None:
+            cid = self.tclauseList[pid][1]
+            root, validation = getInputClauseBdd(cid)
+            self.tbddList[pid-1] = (root, validation)
+
     def placeInBucket(self, buckets, root, validation):
         supportIds = self.manager.getSupportIds(root)
         for id in supportIds:
@@ -409,12 +426,21 @@ class Pbip:
                 self.placeInBucket(buckets, nroot, nvalidation)
         raise PbipException("", "Unexpected exit from bucketReduce.  buckets = %s" % str(buckets))
 
+    def getInputClauseBdd(self, id):
+        iclause = self.creader.clauses[id-1]
+        clause = [self.litMap[lit] for lit in iclause]
+        root, validation = self.manager.constructClause(id, clause)
+        if self.verbLevel >= 4:
+            print("PBIP: Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), id))
+        return (root, validation)
 
     def doInput(self, pid, hlist):
         clist= self.constraintList[pid-1]
         if not self.bddOnly and len(hlist) == 1 and self.tclauseList[pid-1][0] is not None:
             self.tclauseList[pid-1] = (self.tclauseList[pid-1][0], hlist[0])
-            print("PBIP: Constraint #%d represented by clause #%d" % (pid, hlist[0]))
+            if self.verbLevel >= 2:
+                print("PBIP: Processed PBIP input #%d.  Represented by input clause #%d" % (pid, hlist[0]))
+            return
         externalIdSet = set([])
         internalIdSet = set([])
         for con in clist:
@@ -430,11 +456,9 @@ class Pbip:
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP Input #%d.  Input clauses %s" % (pid, str(hlist)))
         for hid in hlist:
+            root, validation = self.getInputClauseBdd(hid)
             iclause = self.creader.clauses[hid-1]
-            clause = [self.litMap[lit] for lit in iclause]
-            root, validation = self.manager.constructClause(hid, clause)
-            if self.verbLevel >= 4:
-                print("PBIP: Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), hid))
+            root, validation = self.getInputClauseBdd(hid)
             for lit in iclause:
                 ivar = abs(lit)
                 id = self.manager.variables[ivar-1].id
@@ -486,7 +510,9 @@ class Pbip:
         if not hok:
             self.valid = False
         elif len(hlist) == 1:
-            (r1,v1) = self.tbddList[hlist[0]-1]
+            hid = hlist[0]
+            self.needTbdd(hid)
+            (r1,v1) = self.tbddList[hid-1]
             (ok, implication) = self.manager.justifyImply(r1, root)
             if not ok:
                 print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
@@ -494,8 +520,11 @@ class Pbip:
             else:
                 antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
         else:
-            (r1,v1) = self.tbddList[hlist[0]-1]
-            (r2,v2) = self.tbddList[hlist[1]-1]
+            hid1, hid2 = hlist
+            self.needTbdd(hid1)
+            (r1,v1) = self.tbddList[hid1-1]
+            self.needTbdd(hid2)
+            (r2,v2) = self.tbddList[hid2-1]
             (ok, implication) = self.manager.applyAndJustifyImply(r1, r2, root)
             if not ok:
                 print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
