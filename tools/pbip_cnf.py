@@ -9,9 +9,10 @@ import solver
 import pbip
 
 def usage(name):
-    print("Usage %s: [-h] [-v VERB] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
+    print("Usage %s: [-h] [-v VERB] [-b] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
     print("  -h              Print this message")
     print("  -v VERB         Set verbosity level")
+    print("  -b              Pure BDD mode.  Don't make use of clausal representations")
     print("  -i INFILE.ipbip Input PBIP file (with unhinted inputs)")
     print("  -o OUTFILE.pbip Output PBIP file (with hints)")
     print("  -c OUTFILE.cnf  Output CNF file")
@@ -132,6 +133,7 @@ class PbipWriter(Writer):
 
 class CnfGenerator:
     verbLevel = 1
+    bddOnly = False
     cwriter = None
     preader = None
     # Information from PBIP file
@@ -143,8 +145,9 @@ class CnfGenerator:
     manager = None
     inputVariableCount = 0
     
-    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel):
+    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, bddOnly):
         self.verbLevel = verbLevel
+        self.bddOnly = bddOnly
         self.cwriter = CnfWriter(cnfName, verbLevel)
         self.preader = pbip.PbipReader(inPbipName, verbLevel)
         self.pwriter = PbipWriter(outPbipName, verbLevel)
@@ -199,7 +202,7 @@ class CnfGenerator:
             self.pwriter.doComment(com)
         if cmd == 'i':
             clauses = None
-            if len(clist) == 1:
+            if not self.bddOnly and len(clist) == 1:
                 tclause = clist[0].getClause()
                 if tclause is not None:
                     clauses = [tclause]
@@ -221,15 +224,18 @@ class CnfGenerator:
 
 def run(name, argList):
     verbLevel = 1
+    bddOnly = False
     cnfName = ""
     inPbipName = ""
     outPbipName = ""
 
-    optlist, args = getopt.getopt(argList, "hv:c:i:o:")
+    optlist, args = getopt.getopt(argList, "hbv:c:i:o:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
+        elif opt == '-b':
+            bddOnly = True
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -256,7 +262,7 @@ def run(name, argList):
         return
 
     start = datetime.datetime.now()
-    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel)
+    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel, bddOnly)
     generator.run()
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
