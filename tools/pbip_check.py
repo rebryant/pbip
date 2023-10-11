@@ -7,9 +7,10 @@ import getopt
 import pbip
 
 def usage(name):
-    print("Usage %s: [-h] [-v VERB] -i FILE.cnf -p FILE.pbip [-o FILE.lrat]")
+    print("Usage %s: [-h] [-v VERB] [-b] -i FILE.cnf -p FILE.pbip [-o FILE.lrat]")
     print("  -h           Print this message")
     print("  -v VERB      Set verbosity level")
+    print("  -b              Pure BDD mode.  Don't make use of clausal representations")
     print("  -i FILE.cnf  Input CNF file")
     print("  -p FILE.pbip Input proof file")
     print("  -o FILE.lrat Output proof file")
@@ -20,12 +21,15 @@ def run(name, argList):
     cnfName = ""
     pbipName = ""
     lratName = ""
+    bddOnly = False
 
-    optlist, args = getopt.getopt(argList, "hv:i:p:o:")
+    optlist, args = getopt.getopt(argList, "hbv:i:p:o:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
+        elif opt == '-b':
+            bddOnly = True
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -47,7 +51,7 @@ def run(name, argList):
         usage(name)
         return
     start = datetime.datetime.now()
-    pb = pbip.Pbip(cnfName, pbipName, lratName, verbLevel)
+    pb = pbip.Pbip(cnfName, pbipName, lratName, verbLevel, bddOnly)
     pb.run()
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds

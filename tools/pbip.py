@@ -255,6 +255,7 @@ class StepType:
 
 class Pbip:
     verbLevel = 1
+    bddOnly = False
     valid = True
     creader = None
     preader = None
@@ -266,7 +267,10 @@ class Pbip:
     # Trusted BDD representations of constraints
     # Each TBDD is pair (root, validation)
     tbddList = []
+    # Clausal representations of constratints (when they exist).
+    # Pair of form (literalList, clauseId).  Both can be None
     # Each constraint carries a type that determines how it can be used as a hint
+    tclauseList = []
     stepTypeList = []
     maxBddSize = 0
     maxCoefficient = 0
@@ -278,8 +282,9 @@ class Pbip:
     varMap = {}
     levelMap = {}
     
-    def __init__(self, cnfName, pbipName, lratName, verbLevel):
+    def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly):
         self.verbLevel = verbLevel
+        self.bddOnly = bddOnly
         self.valid = True
         self.creader = solver.CnfReader(cnfName, verbLevel)
         self.preader = PbipReader(pbipName, verbLevel)
@@ -327,6 +332,10 @@ class Pbip:
         else:
             nroot = clist[0].root
         self.tbddList.append((nroot,None))
+        tclause = None
+        if not self.bddOnly and len(clist) == 1:
+            tclause = clist[0].getClause()
+        self.tclauseList.append((tclause, None))
         self.maxBddSize = max(self.maxBddSize, self.manager.getSize(nroot))
         pid = len(self.constraintList)
         done = False
@@ -412,6 +421,9 @@ class Pbip:
 
     def doInput(self, pid, hlist):
         clist= self.constraintList[pid-1]
+        if not self.bddOnly and len(hlist) == 1 and self.tclauseList[pid-1][0] is not None:
+            self.tclauseList[pid-1] = (self.tclauseList[pid-1][0], hlist[0])
+            print("PBIP: Constraint #%d represented by clause #%d" % (pid, hlist[0]))
         externalIdSet = set([])
         internalIdSet = set([])
         for con in clist:
@@ -529,21 +541,28 @@ class Pbip:
         finalAntecedents = []
         litList = []
         for hint in hlist:
+            clauseUsed = False
             aid = hint[0]
             alit = hint[1] if len(hint) == 2 else None
             stepAntecedents = []
             stepClause = []
             if aid < pid:
-                (ar,av) = self.tbddList[aid-1]
                 propArgs = [-lit for lit in litList]
                 if alit is not None:
                     propArgs += [alit]
-                (vroot,vid) = self.manager.constructOr(propArgs, self.litMap)
-                stepAntecedents = [av, vid]
-                (uroot,uid) = self.manager.justifyImply(ar,vroot)
-                if uid != resolver.tautologyId:
-                    stepAntecedents.append(uid)
                 stepClause = propArgs
+                (tclause, tcid) = self.tclauseList[aid-1]
+                if tcid is not None:
+                    # Use the clausal representation for unit propagation
+                    clauseUsed = True
+                    stepAntecedents = [tcid]
+                else:
+                    (ar,av) = self.tbddList[aid-1]
+                    (vroot,vid) = self.manager.constructOr(propArgs, self.litMap)
+                    stepAntecedents = [av, vid]
+                    (uroot,uid) = self.manager.justifyImply(ar,vroot)
+                    if uid != resolver.tautologyId:
+                        stepAntecedents.append(uid)
             else:
                 propArgs = list(litList)
                 if alit is not None:
@@ -555,13 +574,14 @@ class Pbip:
                     stepAntecedents.append(uid)
                 stepClause = [-lit for lit in propArgs] + [root.id]
             # Generate proof for step
-            comment = "Justification of step in RUP addition #%d.  Hint = %s" % (pid, str(hint))
+            used = "clause" if clauseUsed else "BDDs"
+            comment = "Justification of step in RUP addition #%d (%s used).  Hint = %s" % (pid, used, str(hint))
             scid = self.prover.createClause(stepClause, stepAntecedents, comment)
             finalAntecedents.append(scid)
             if alit is not None:
                 litList.append(alit)
             if self.verbLevel >= 3:
-                print("PBIP: Processing RUP addition #%d step.  Hint = %s.  Generated clause #%d" % (pid, str(hint), scid))
+                print("PBIP: Processing RUP addition #%d step (%s used). Hint = %s.  Generated clause #%d" % (pid, used, str(hint), scid))
 
         comment = "Justification of RUP addition #%d" % pid
         cid = self.prover.createClause([root.id], finalAntecedents, comment)
