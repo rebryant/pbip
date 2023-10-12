@@ -310,7 +310,8 @@ class Pbip:
 
     def doStep(self):
         command, clist, hlist, comlist = self.preader.readLine()
-
+        if command == '':
+            return True
         # Special handling of input constraints represented by single clauses
         tclause = None
         tcid = None
@@ -324,8 +325,6 @@ class Pbip:
         self.tclauseList.append((tclause, tcid))
         for con in clist:
             self.maxCoefficient = max(self.maxCoefficient, con.maxCoefficient())
-        if command == '':
-            return True
         if not clauseOnly:
             for con in clist:
                 con.buildBdd(self)
@@ -358,8 +357,8 @@ class Pbip:
         
     def needTbdd(self, pid):
         if self.tbddList[pid-1][0] is None:
-            cid = self.tclauseList[pid][1]
-            root, validation = getInputClauseBdd(cid)
+            cid = self.tclauseList[pid-1][1]
+            root, validation = self.getInputClauseBdd(cid)
             self.tbddList[pid-1] = (root, validation)
 
     def placeInBucket(self, buckets, root, validation):
@@ -456,7 +455,6 @@ class Pbip:
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP Input #%d.  Input clauses %s" % (pid, str(hlist)))
         for hid in hlist:
-            root, validation = self.getInputClauseBdd(hid)
             iclause = self.creader.clauses[hid-1]
             root, validation = self.getInputClauseBdd(hid)
             for lit in iclause:
@@ -515,7 +513,7 @@ class Pbip:
             (r1,v1) = self.tbddList[hid-1]
             (ok, implication) = self.manager.justifyImply(r1, root)
             if not ok:
-                print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hlist[0]))
+                print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Step #%d" % (pid, hid))
                 self.valid = False
             else:
                 antecedents = [cid for cid in [v1, implication] if cid != resolver.tautologyId]
@@ -527,7 +525,7 @@ class Pbip:
             (r2,v2) = self.tbddList[hid2-1]
             (ok, implication) = self.manager.applyAndJustifyImply(r1, r2, root)
             if not ok:
-                print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hlist[0], hlist[1]))
+                print("PBIP ERROR: Couldn't justify Step #%d.  Not implied by Steps #%d and #%d" % (pid, hid1, hid2))
                 self.valid = False
             else:
                 antecedents = [cid for cid in [v1, v2, implication] if cid != resolver.tautologyId]
