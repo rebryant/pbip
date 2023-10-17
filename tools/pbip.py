@@ -67,10 +67,19 @@ def listify(s, maxdepth = None, mindepth = None):
             msg = "Trying to append token '%s' at invalid depth" % tok
             return (msg, None)
         else:
+            ptok = tok
+            negate = False
+            if ptok[0] == '~':
+                negate = True
+                ptok = ptok[1:]
+            if ptok[0] == 'x':
+                ptok = ptok[1:]
             try:
-                val = int(tok)
+                val = int(ptok)
+                if negate:
+                    val = -val
             except:
-                msg = "Token %s not integer" % tok
+                msg = "Couldn't extract integer from token %s" % tok
                 return (msg, None)
             active[-1].append(val)
     if len(active) > 1:
@@ -217,7 +226,7 @@ class PbipReader:
                 comlist.append(uncomment(line))
                 continue
             command = line[0]
-            if command not in ['i', 'a', 'u']:
+            if command not in "iauk":
                 raise PbipException("", "File %s Line %d: Invalid command '%s'" % (self.fname, self.lineCount, command))
             cline  = trim(line[1:])
             pos = cline.find(';')
@@ -265,8 +274,10 @@ class Pbip:
     # Each TBDD is pair (root, validation)
     tbddList = []
     # Clausal representations of constratints (when they exist).
-    # Pair of form (literalList, clauseId).  Both can be None
-    # Each constraint carries a type that determines how it can be used as a hint
+    # Pair of form.  Can be of form:
+    # (clause, cid).  Clause is present in input or proof file with specified ID
+    # (clause, None). Constraint has clausal form, but hasn't been validated
+    # (None, None).   Running bddOnly mode or constraint is not clausal
     tclauseList = []
     maxBddSize = 0
     maxCoefficient = 0
@@ -322,6 +333,12 @@ class Pbip:
                 # Won't generate BDD representation until needed
                 tcid = hlist[0]
                 clauseOnly = True
+            elif tclause is not None and command in "uk":
+                # Allow setting of target clause
+                pass
+#                clauseOnly = True
+            else:
+                tclause = None
         self.tclauseList.append((tclause, tcid))
         for con in clist:
             self.maxCoefficient = max(self.maxCoefficient, con.maxCoefficient())
@@ -344,22 +361,43 @@ class Pbip:
             self.prover.comment(com)
         if command == 'i':
             self.doInput(pid, hlist)
-            done = nroot is not None and nroot == self.manager.leaf0
+            done = len(tclause) == 0 if clauseOnly else nroot == self.manager.leaf0
         elif command == 'a':
             self.doAssertion(pid, hlist)
             done = nroot == self.manager.leaf0
-        elif command == 'u':
+        elif command in "uk":
             self.doRup(pid, hlist)
-            done = nroot == self.manager.leaf0
+            done = len(tclause) == 0 if clauseOnly else nroot == self.manager.leaf0
         else:
             raise PbipException("", "Unexpected command '%s'" % command)
         return done
         
     def needTbdd(self, pid):
-        if self.tbddList[pid-1][0] is None:
-            cid = self.tclauseList[pid-1][1]
-            root, validation = self.getInputClauseBdd(cid)
-            self.tbddList[pid-1] = (root, validation)
+        (root, validation) = self.tbddList[pid-1]
+        if validation is None:
+            clause, cid = self.tclauseList[pid-1]
+            if cid is not None:
+                lits = [self.litMap[lit] for lit in clause]
+                root, validation = self.manager.constructClauseBdd(cid, lits)
+            else:
+                raise PbipException("Can't generate TBDD representation of constraint %d" % pid)
+            self.tbddList[pid-1] = (root, validation)            
+
+    def needClauseValidation(self, pid):
+        clause, cid = self.tclauseList[pid-1]
+        if cid is not None:
+            return
+        if clause is None:
+            raise PbipException("Can't generate clausal representation of constraint %d" % pid)
+        (root, validation) = self.tbddList[pid-1]
+        if root is not None:
+            oroot, ovalidation = self.manager.constructOr(clause, self.litMap)
+            comment = "Generate validated clause from TBDD %s" % root.label()
+            cvalidation = self.manager.prover.createClause(clause, [validation, ovalidation], comment)
+            self.tclauseList[pid-1] = (clause, cvalidation) 
+        else:
+            raise PbipException("Can't generate validated clausal representation of constraint #%d" % pid)
+
 
     def placeInBucket(self, buckets, root, validation):
         supportIds = self.manager.getSupportIds(root)
@@ -428,7 +466,7 @@ class Pbip:
     def getInputClauseBdd(self, id):
         iclause = self.creader.clauses[id-1]
         clause = [self.litMap[lit] for lit in iclause]
-        root, validation = self.manager.constructClause(id, clause)
+        root, validation = self.manager.constructClauseBdd(id, clause)
         if self.verbLevel >= 4:
             print("PBIP: Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), id))
         return (root, validation)
@@ -541,7 +579,14 @@ class Pbip:
                 self.prover.comment("Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
 
     def doRup(self, pid, hlist):
-        root = self.tbddList[pid-1][0]
+        root, validation = self.tbddList[pid-1]
+        targetClause, cid = self.tclauseList[pid-1]
+        clausalResult = targetClause is not None
+        bddTarget = True
+        if bddTarget:
+            if root is None:
+                raise PbipException("", "Have neither clausal nor BDD representation of constraint %d" % pid)
+            targetClause = [root.id] if root != self.manager.leaf0 else []
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP rup line #%d.  Hints = %s" % (pid, str(hlist)))
         print("PBIP: Processing RUP line #%d.  Root = %s.  Hints = %s" % (pid, root.label(), str(hlist)))
@@ -550,7 +595,7 @@ class Pbip:
         litList = []
         for hint in hlist:
             clauseUsed = False
-            aid = hint[0]
+            aid = abs(hint[0])
             alit = hint[1] if len(hint) == 2 else None
             stepAntecedents = []
             stepClause = []
@@ -580,7 +625,7 @@ class Pbip:
                 (uroot,uid) = self.manager.justifyImply(vroot,root)
                 if uid != resolver.tautologyId:
                     stepAntecedents.append(uid)
-                stepClause = [-lit for lit in propArgs] + [root.id]
+                stepClause = [-lit for lit in propArgs] + targetClause
             # Generate proof for step
             used = "clause" if clauseUsed else "BDDs"
             comment = "Justification of step in RUP addition #%d (%s used).  Hint = %s" % (pid, used, str(hint))
@@ -592,15 +637,18 @@ class Pbip:
                 print("PBIP: Processing RUP addition #%d step (%s used). Hint = %s.  Generated clause #%d" % (pid, used, str(hint), scid))
 
         comment = "Justification of RUP addition #%d" % pid
-        cid = self.prover.createClause([root.id], finalAntecedents, comment)
+        cid = self.prover.createClause(targetClause, finalAntecedents, comment)
         self.tbddList[pid-1] = (root, cid)
+        if clausalResult and len(targetClause) > 0:
+            self.needClauseValidation(pid)
+            targetClause, cid = self.tclauseList[pid-1]
         if self.verbLevel >= 2:
-            if root.id == -resolver.tautologyId:
-                print("PBIP: Processed PBIP RUP addition #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
-                self.prover.comment("Processed PBIP RUP addition #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
+            if len(targetClause) == 0:
+                print("PBIP: Processed PBIP RUP addition #%d.  Empty clause #%d" % (pid, cid))
+                self.prover.comment("Processed PBIP RUP addition #%d.  Empty clause #%d" % (pid, cid))
             else:
-                print("PBIP: Processed PBIP RUP addition #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
-                self.prover.comment("Processed PBIP RUP addition #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
+                print("PBIP: Processed PBIP RUP addition #%d.  Target clause %s #%d" % (pid, targetClause, cid))
+                self.prover.comment("Processed PBIP RUP addition #%d.  Target clause %s #%d" % (pid, targetClause, cid))
             
     def run(self):
         while not self.doStep():

@@ -400,7 +400,7 @@ class Manager:
 
     # Generate BDD for disjunction of literals
     # and generate unit clause for root
-    def constructClause(self, clauseId, literalList):
+    def constructClauseBdd(self, clauseId, literalList):
         root = self.buildClause(literalList)
         litNodes = self.deconstructClauseBDD(root)
         # List antecedents in reverse order of resolution steps
