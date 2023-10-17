@@ -1207,12 +1207,22 @@ class Constraint:
     def isTrivial(self):
         return self.cval <= 0 and len(self) == 0
 
-    def opbString(self, forceEquality = False):
+    # generate constant if make all coefficients positive
+    def variableNormalizedCval(self):
+        incrs = [-a if a < 0 else 0 for a in self.nz.values()]
+        return self.cval + sum(incrs)
+
+
+    def opbString(self, forceEquality = False, variableNormalized = False):
         result = ""
         for (k,v) in self.nz.items():
-            result += "%d x%d " % (v, k)
+            if variableNormalized:
+                result += "%d %sx%d " % (abs(v), "~" if v < 0 else "", k)
+            else:
+                result += "%d x%d " % (v, k)
         rel = "=" if forceEquality else ">="
-        result += "%s %d" % (rel, self.cval)
+        cval = self.variableNormalizedCval() if variableNormalized else self.cval
+        result += "%s %d" % (rel, cval)
         return result
 
     def __str__(self):

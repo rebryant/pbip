@@ -122,7 +122,11 @@ class PbipWriter(Writer):
         shints = []
         for hint in hints:
             if type(hint) == type([0]):
-                shint = '[' + " ".join([str(h) for h in hint]) + ']'
+                slist = [str(h) for h in hint]
+                if len(hint) == 2:
+                    h = hint[1]
+                    slist[1] = ("x" + slist[1]) if h >= 0 else ("~x" + slist[1][1:])
+                shint = '[' + " ".join(slist) + ']'
             else:
                 shint = str(hint)
             shints.append(shint)
@@ -144,6 +148,8 @@ class CnfGenerator:
     prover = None
     manager = None
     inputVariableCount = 0
+    # Map from tuple representation of clause to its ID
+    clauseMap = {}
     
     def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, bddOnly):
         self.verbLevel = verbLevel
@@ -155,6 +161,7 @@ class CnfGenerator:
         self.commandList = []
         self.constraintList = []
         self.hintList = []
+        self.clauseMap = {}
         while True:
             cmd, clist, hints, comments = self.preader.readLine()
             if cmd == "":
@@ -195,11 +202,12 @@ class CnfGenerator:
         hlist = self.hintList[cid-1]
         comments = self.commentsList[cid-1]
         if len(clist) == 1:
-            opbstring = clist[0].opbString()
+            opbstring = clist[0].opbString(variableNormalized = True)
         else:
-            opbstring = clist[0].opbString(forceEquality = True)
+            opbstring = clist[0].opbString(forceEquality = True, variableNormalized = True)
         for com in comments:
             self.pwriter.doComment(com)
+        self.pwriter.doComment("Constraint #%d" % cid)
         if cmd == 'i':
             clauses = None
             if not self.bddOnly and len(clist) == 1:
@@ -216,7 +224,12 @@ class CnfGenerator:
                 clauses = self.manager.generateClauses(root, up=False)
             hlist = []
             for clause in clauses:
-                id = self.cwriter.doClause(clause)
+                tclause = tuple(clause)
+                if tclause in self.clauseMap:
+                    id = self.clauseMap[tclause]
+                else:
+                    id = self.cwriter.doClause(clause)
+                    self.clauseMap[tclause] = id
                 hlist.append(id)
             self.pwriter.doInput(opbstring, hlist)
         else:
