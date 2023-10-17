@@ -233,6 +233,8 @@ class CnfGenerator:
                 hlist.append(id)
             self.pwriter.doInput(opbstring, hlist)
         else:
+            if cmd == 'k':
+                cmd = 'u'
             self.pwriter.doCommand(cmd, opbstring, hlist)
 
 def run(name, argList):

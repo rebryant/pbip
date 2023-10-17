@@ -176,15 +176,17 @@ def parseOpb(line):
         rel = '>='
         cval = -cval
         coeffs = [-c for c in coeffs]
-    nz = { v : c for v,c in zip(vars,coeffs) }
+    tups = [(v,c) for v,c in zip(vars, coeffs)]
+    tups.sort(key = lambda t : abs(t[0]))
+    nz = { v : c for v,c in tups }
     con1 = pseudoboolean.Constraint(len(nz), cval)
     con1.setNz(nz)
     if rel == '>=':
         return (con1,)
     else:
         cval = -cval
-        coeffs = [-c for c in coeffs]
-        nz = { v : c for v,c in zip(vars,coeffs) }
+        tups = [(t[0],-t[1]) for t in tups]
+        nz = { v : c for v,c in tups }
         con2 = pseudoboolean.Constraint(len(nz), cval)
         con2.setNz(nz)
         return (con1, con2)
