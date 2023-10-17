@@ -589,7 +589,8 @@ class Pbip:
             targetClause = [root.id] if root != self.manager.leaf0 else []
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP rup line #%d.  Hints = %s" % (pid, str(hlist)))
-        print("PBIP: Processing RUP line #%d.  Root = %s.  Hints = %s" % (pid, root.label(), str(hlist)))
+        if self.verbLevel >= 3:
+            print("PBIP: Processing RUP line #%d.  Root = %s.  Hints = %s" % (pid, root.label(), str(hlist)))
         # Build up antecedents for final RUP addition
         finalAntecedents = []
         litList = []
