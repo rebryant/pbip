@@ -595,6 +595,7 @@ class Pbip:
         root, validation = self.tbddList[pid-1]
         targetClause, cid = self.tclauseList[pid-1]
         clausalResult = targetClause is not None
+        bddTarget = not clausalResult
         bddTarget = True
         if bddTarget:
             if root is None:
@@ -630,7 +631,7 @@ class Pbip:
                     (uroot,uid) = self.manager.justifyImply(ar,vroot)
                     if uid != resolver.tautologyId:
                         stepAntecedents.append(uid)
-            else:
+            elif bddTarget:
                 propArgs = list(litList)
                 if alit is not None:
                     propArgs += [-alit]
@@ -640,11 +641,16 @@ class Pbip:
                 if uid != resolver.tautologyId:
                     stepAntecedents.append(uid)
                 stepClause = [-lit for lit in propArgs] + targetClause
+            else:
+                # Can unit propagate directly off target clause
+                litList += [-lit for lit in targetClause]
+                continue
             # Generate proof for step
             used = "clause" if clauseUsed else "BDDs"
             comment = "Justification of step in RUP addition #%d (%s used).  Hint = %s" % (pid, used, str(hint))
             scid = self.prover.createClause(stepClause, stepAntecedents, comment)
-            finalAntecedents.append(scid)
+            if scid != resolver.tautologyId:
+                finalAntecedents.append(scid)
             if alit is not None:
                 litList.append(alit)
             if self.verbLevel >= 3:
@@ -652,7 +658,8 @@ class Pbip:
 
         comment = "Justification of RUP addition #%d" % pid
         cid = self.prover.createClause(targetClause, finalAntecedents, comment)
-        self.tbddList[pid-1] = (root, cid)
+        if bddTarget:
+            self.tbddList[pid-1] = (root, cid)
         if clausalResult and len(targetClause) > 0:
             self.needClauseValidation(pid)
             targetClause, cid = self.tclauseList[pid-1]
