@@ -594,9 +594,7 @@ class Pbip:
     def doRup(self, pid, hlist):
         root, validation = self.tbddList[pid-1]
         targetClause, cid = self.tclauseList[pid-1]
-        clausalResult = targetClause is not None
-        bddTarget = not clausalResult
-        bddTarget = True
+        bddTarget = targetClause is None
         if bddTarget:
             if root is None:
                 raise PbipException("", "Have neither clausal nor BDD representation of constraint %d" % pid)
@@ -660,9 +658,8 @@ class Pbip:
         cid = self.prover.createClause(targetClause, finalAntecedents, comment)
         if bddTarget:
             self.tbddList[pid-1] = (root, cid)
-        if clausalResult and len(targetClause) > 0:
-            self.needClauseValidation(pid)
-            targetClause, cid = self.tclauseList[pid-1]
+        else:
+            self.tclauseList[pid-1] = (targetClause, cid)
         if self.verbLevel >= 2:
             if len(targetClause) == 0:
                 print("PBIP: Processed PBIP RUP addition #%d.  Empty clause #%d" % (pid, cid))
