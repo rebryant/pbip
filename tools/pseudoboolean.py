@@ -1138,7 +1138,6 @@ class Constraint:
             return
 
         ilist.sort(key = lambda id : csys.levelMap[id])
-
         # Determine at what offsets will need node, starting from root and working down
         needNodes = { i : {} for i in ilist }
         previ = ilist[0]
