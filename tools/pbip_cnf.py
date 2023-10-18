@@ -9,10 +9,11 @@ import solver
 import pbip
 
 def usage(name):
-    print("Usage %s: [-h] [-v VERB] [-b] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
+    print("Usage %s: [-h] [-v VERB] [-b] [-R] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
     print("  -h              Print this message")
     print("  -v VERB         Set verbosity level")
     print("  -b              Pure BDD mode.  Don't make use of clausal representations")
+    print("  -R              Reverse BDD variable ordering")
     print("  -i INFILE.ipbip Input PBIP file (with unhinted inputs)")
     print("  -o OUTFILE.pbip Output PBIP file (with hints)")
     print("  -c OUTFILE.cnf  Output CNF file")
@@ -138,6 +139,7 @@ class PbipWriter(Writer):
 class CnfGenerator:
     verbLevel = 1
     bddOnly = False
+    reverseOrder = False
     cwriter = None
     preader = None
     # Information from PBIP file
@@ -151,9 +153,10 @@ class CnfGenerator:
     # Map from tuple representation of clause to its ID
     clauseMap = {}
     
-    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, bddOnly):
+    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, bddOnly, reverseOrder):
         self.verbLevel = verbLevel
         self.bddOnly = bddOnly
+        self.reverseOrder = reverseOrder
         self.cwriter = CnfWriter(cnfName, verbLevel)
         self.preader = pbip.PbipReader(inPbipName, verbLevel)
         self.pwriter = PbipWriter(outPbipName, verbLevel)
@@ -180,7 +183,7 @@ class CnfGenerator:
         self.prover = solver.Prover(fname="", writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = False)
         self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.inputVariableCount+1, verbLevel = verbLevel)
         for id in range(1, self.inputVariableCount+1):
-            inputId = id
+            inputId = self.inputVariableCount+1-id if self.reverseOrder else id
             var = self.manager.newVariable(name = "V%d" % inputId, id = inputId)
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
@@ -240,17 +243,20 @@ class CnfGenerator:
 def run(name, argList):
     verbLevel = 1
     bddOnly = False
+    reverseOrder = False
     cnfName = ""
     inPbipName = ""
     outPbipName = ""
 
-    optlist, args = getopt.getopt(argList, "hbv:c:i:o:")
+    optlist, args = getopt.getopt(argList, "hbRv:c:i:o:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-b':
             bddOnly = True
+        elif opt == '-R':
+            reverseOrder = True
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -277,7 +283,7 @@ def run(name, argList):
         return
 
     start = datetime.datetime.now()
-    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel, bddOnly)
+    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel, bddOnly, reverseOrder)
     generator.run()
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
