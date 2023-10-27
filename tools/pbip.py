@@ -285,6 +285,7 @@ class Pbip:
     tclauseList = []
     maxBddSize = 0
     maxCoefficient = 0
+    lastClauseCount = 0
 
     # Enable use as constraint system
     prover = None
@@ -323,6 +324,13 @@ class Pbip:
         self.levelMap = { var.id : var.level for var in self.manager.variables }
         self.maxBddSize = 0
         self.maxCoefficient = 0
+        self.deltaClauses()
+
+
+    def deltaClauses(self):
+        occ = self.lastClauseCount
+        self.lastClauseCount = self.prover.clauseCount
+        return self.lastClauseCount - occ
 
     def doStep(self):
         command, clist, hlist, comlist = self.preader.readLine()
@@ -491,8 +499,6 @@ class Pbip:
         internalIdSet = set([])
         for con in clist:
             for ivar in con.nz.keys():
-## TEST
-#                id = self.manager.variables[ivar-1].id
                 id = ivar
                 externalIdSet.add(id)
         # Set up buckets containing trusted BDD representations of clauses
@@ -508,8 +514,6 @@ class Pbip:
             root, validation = self.getInputClauseBdd(hid)
             for lit in iclause:
                 ivar = abs(lit)
-## TEST
-#                id = self.manager.variables[ivar-1].id
                 id = ivar
                 if id not in externalIdSet and id not in internalIdSet:
                     internalIdSet.add(id)
@@ -535,10 +539,10 @@ class Pbip:
         
         if self.verbLevel >= 2:
             if root.id == -resolver.tautologyId:
-                print("PBIP: Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Empty clause #%d" % (pid, broot.label(), root.label(), cid))
+                print("PBIP: Processed PBIP input #%d.  Empty clause #%d.  Added %d clauses" % (pid, cid.  self.deltaClauses()))
                 self.prover.comment("Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Empty clause #%d" % (pid, broot.label(), root.label(), cid))
             else:
-                print("PBIP: Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
+                print("PBIP: Processed PBIP input #%d. Added %d clauses" % (pid, self.deltaClauses()))
                 self.prover.comment("Processed PBIP input #%d.  Constraint root = %s, Generated root = %s Unit clause #%d [%d]" % (pid, broot.label(), root.label(), cid, root.id))
 
 
@@ -585,10 +589,10 @@ class Pbip:
         self.tbddList[pid-1] = (root, cid)
         if self.verbLevel >= 2:
             if root.id == -resolver.tautologyId:
-                print("PBIP: Processed PBIP assertion #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
+                print("PBIP: Processed PBIP assertion #%d.  Empty clause #%d.  Added %d clauses" % (pid, cid, self.deltaClauses()))
                 self.prover.comment("Processed PBIP assertion #%d.  Root %s Empty clause #%d" % (pid, root.label(), cid))
             else:
-                print("PBIP: Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
+                print("PBIP: Processed PBIP assertion #%d.  Added %d clauses" % (pid, self.deltaClauses()))
                 self.prover.comment("Processed PBIP assertion #%d.  Root %s Unit clause #%d [%d]" % (pid, root.label(), cid, root.id))
 
     def doRup(self, pid, hlist):
@@ -662,10 +666,10 @@ class Pbip:
             self.tclauseList[pid-1] = (targetClause, cid)
         if self.verbLevel >= 2:
             if len(targetClause) == 0:
-                print("PBIP: Processed PBIP RUP addition #%d.  Empty clause #%d" % (pid, cid))
+                print("PBIP: Processed PBIP RUP addition #%d.  Empty clause #%d.  Added %d clauses" % (pid, cid, self.deltaClauses()))
                 self.prover.comment("Processed PBIP RUP addition #%d.  Empty clause #%d" % (pid, cid))
             else:
-                print("PBIP: Processed PBIP RUP addition #%d.  Target clause %s #%d" % (pid, targetClause, cid))
+                print("PBIP: Processed PBIP RUP addition #%d.  Added %d clauses" % (pid, self.deltaClauses()))
                 self.prover.comment("Processed PBIP RUP addition #%d.  Target clause %s #%d" % (pid, targetClause, cid))
             
     def run(self):
