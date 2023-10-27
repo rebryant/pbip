@@ -13,7 +13,7 @@ def usage(name):
     print("  -h              Print this message")
     print("  -v VERB         Set verbosity level")
     print("  -b              Pure BDD mode.  Don't make use of clausal representations")
-    print("  -R              Reverse BDD variable ordering")
+    print("  -R              Don't rename variables")
     print("  -i INFILE.ipbip Input PBIP file (with unhinted inputs)")
     print("  -o OUTFILE.pbip Output PBIP file (with hints)")
     print("  -c OUTFILE.cnf  Output CNF file")
@@ -71,31 +71,71 @@ class Writer:
         self.outfile.close()
         self.outfile = None
 
-
 # Creating CNF
 class CnfWriter(Writer):
     clauseCount = 0
-    outputList = []
+    # Set of tuples (T/F, item)
+    # Boolean T for clause F for comment
+    # item: list of literals for clause, string for comment
+    items = []
 
     def __init__(self, fname, verbLevel = 1):
         Writer.__init__(self, fname, verbLevel = verbLevel)
         self.clauseCount = 0
-        self.ouputList = []
+        self.items = []
 
     # With CNF, must accumulate all of the clauses, since the file header
     # requires providing the number of clauses.
 
     def doComment(self, line):
-        self.outputList.append("c " + line)
+        self.items.append((False, line))
 
     def doClause(self, literals):
         for lit in literals:
             var = abs(lit)
             self.variableCount = max(var, self.variableCount)
-        ilist = literals + [0]
-        self.outputList.append(" ".join([str(i) for i in ilist]))
+        sliterals = sorted(literals, key = lambda lit : abs(lit))
+        self.items.append((True, sliterals))
         self.clauseCount += 1
         return self.clauseCount
+
+    # Rename variables to order them according to least variable in each clause
+    def remapVariables(self, inputCount):
+        # Associate each non-input variable with the lowest-numbered variable for which both occur in some clause
+        varBucket = {}
+        inputSet = set(range(1,inputCount+1))
+        for (isClause, element) in self.items:
+            if not isClause:
+                continue
+            vars = [abs(lit) for lit in element]
+            mvar = min(vars)
+            for var in vars:
+                if var in inputSet:
+                    continue
+                elif var in varBucket:
+                    varBucket[var] = min(mvar, varBucket[var])
+                else:
+                    varBucket[var] = mvar
+        # Generate list of variables associated with each minimum variable
+        mvarMap = { mvar : [] for mvar in inputSet } 
+        for (var, mvar) in varBucket.items():
+            mvarMap[mvar].append(var)
+        # Renumber variables according to positions
+        remap = { mvar : mvar for mvar in inputSet }
+        nextVar = len(inputSet) + 1
+        for mvar in sorted(inputSet):
+            for var in sorted(mvarMap[mvar]):
+                remap[var] = nextVar
+                nextVar += 1
+        # Rewrite the clauses
+        nitems = []
+        for (isClause, element) in self.items:
+            if not isClause:
+                nitems.append((isClause,element))
+                continue
+            nclause = [remap[abs(lit)] * (-1 if lit < 0 else 1) for lit in element]
+            nitems.append((True, nclause))
+        self.items = nitems
 
     def finish(self):
         if self.isNull:
@@ -103,7 +143,12 @@ class CnfWriter(Writer):
         if self.outfile is None:
             return
         self.show("p cnf %d %d" % (self.variableCount, self.clauseCount))
-        for line in self.outputList:
+        for (isClause,element) in self.items:
+            if isClause:
+                slist = [str(lit) for lit in element] + ["0"]
+                line = " ".join(slist)
+            else:
+                line = "c " + element
             self.show(line)
         self.outfile.close()
         self.outfile = None
@@ -139,7 +184,7 @@ class PbipWriter(Writer):
 class CnfGenerator:
     verbLevel = 1
     bddOnly = False
-    reverseOrder = False
+    rename = True
     cwriter = None
     preader = None
     # Information from PBIP file
@@ -153,10 +198,10 @@ class CnfGenerator:
     # Map from tuple representation of clause to its ID
     clauseMap = {}
     
-    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, bddOnly, reverseOrder):
+    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, bddOnly, rename):
         self.verbLevel = verbLevel
         self.bddOnly = bddOnly
-        self.reverseOrder = reverseOrder
+        self.rename = rename
         self.cwriter = CnfWriter(cnfName, verbLevel)
         self.preader = pbip.PbipReader(inPbipName, verbLevel)
         self.pwriter = PbipWriter(outPbipName, verbLevel)
@@ -183,8 +228,7 @@ class CnfGenerator:
         self.prover = solver.Prover(fname="", writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = False)
         self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.inputVariableCount+1, verbLevel = verbLevel)
         for id in range(1, self.inputVariableCount+1):
-            inputId = self.inputVariableCount+1-id if self.reverseOrder else id
-            var = self.manager.newVariable(name = "V%d" % inputId, id = inputId)
+            var = self.manager.newVariable(name = "V%d" % id)
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
     
@@ -194,6 +238,9 @@ class CnfGenerator:
         if self.verbLevel >= 1:
             print("CNFGEN: Problem variables = %d" % self.inputVariableCount)
             print("CNFGEN: CNF variables = %d CNF Clauses = %d" %(self.cwriter.variableCount, self.cwriter.clauseCount))
+            
+        if self.rename:
+            self.cwriter.remapVariables(self.inputVariableCount)
         self.cwriter.finish()
         self.preader.finish()
         self.pwriter.finish()
@@ -212,6 +259,7 @@ class CnfGenerator:
             self.pwriter.doComment(com)
         self.pwriter.doComment("Constraint #%d" % cid)
         if cmd == 'i':
+            self.cwriter.doComment("Clauses for input constraint #%d: %s" % (cid, opbstring))
             clauses = None
             if not self.bddOnly and len(clist) == 1:
                 tclause = clist[0].getClause()
@@ -243,7 +291,7 @@ class CnfGenerator:
 def run(name, argList):
     verbLevel = 1
     bddOnly = False
-    reverseOrder = False
+    rename = True
     cnfName = ""
     inPbipName = ""
     outPbipName = ""
@@ -256,7 +304,7 @@ def run(name, argList):
         elif opt == '-b':
             bddOnly = True
         elif opt == '-R':
-            reverseOrder = True
+            rename = False
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -283,7 +331,7 @@ def run(name, argList):
         return
 
     start = datetime.datetime.now()
-    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel, bddOnly, reverseOrder)
+    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel, bddOnly, rename)
     generator.run()
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds

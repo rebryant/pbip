@@ -264,8 +264,6 @@ class PbipReader:
 class Pbip:
     verbLevel = 1
     bddOnly = False
-    # Order BDD variables in reverse?
-    reverseOrder = True
     valid = True
     creader = None
     preader = None
@@ -294,10 +292,9 @@ class Pbip:
     varMap = {}
     levelMap = {}
     
-    def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly, reverseOrder):
+    def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly):
         self.verbLevel = verbLevel
         self.bddOnly = bddOnly
-        self.reverseOrder = reverseOrder
         self.valid = True
         self.creader = solver.CnfReader(cnfName, verbLevel)
         self.preader = PbipReader(pbipName, verbLevel)
@@ -314,12 +311,11 @@ class Pbip:
         self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.creader.nvar+1, verbLevel = verbLevel)
         self.litMap = {}
         for level in range(1, self.creader.nvar+1):
-            inputId = self.creader.nvar + 1 - level if self.reverseOrder else level
-            var = self.manager.newVariable(name = "V%d" % inputId, id = inputId)
+            var = self.manager.newVariable(name = "V%d" % level)
             t = self.manager.literal(var, 1)
-            self.litMap[ inputId] = t
+            self.litMap[ level] = t
             e = self.manager.literal(var, 0)
-            self.litMap[-inputId] = e
+            self.litMap[-level] = e
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
         self.maxBddSize = 0
@@ -414,8 +410,6 @@ class Pbip:
 
     def placeInBucket(self, buckets, root, validation):
         supportIds = self.manager.getSupportIds(root)
-        if self.reverseOrder:
-            supportIds.reverse()
         for id in supportIds:
             if id in buckets:
                 buckets[id].append((root, validation))
@@ -457,8 +451,6 @@ class Pbip:
     # Bucket reduction assumes all external variables come first in variable ordering
     def bucketReduce(self, buckets):
         ids = sorted(list(buckets.keys()))
-        if self.reverseOrder:
-            ids.reverse()
         if ids[0] == 0:
             ids = ids[1:] + [0]
         for id in ids:
