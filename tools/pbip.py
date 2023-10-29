@@ -198,20 +198,67 @@ class PbipReader:
     verbLevel = 1
     
     def __init__(self, fname, verbLevel):
+        self.fname = fname
+        self.start()
+        self.verbLevel = verbLevel
+
+    def start(self):
         try:
-            self.fname = fname
-            self.infile = open(fname, 'r')
+            self.infile = open(self.fname, 'r')            
         except:
             print("Can't open input file %s" % fname)
             raise PbipException("", "Invalid input file")
         self.lineCount = 0
-        self.verbLevel = verbLevel
 
     def finish(self):
         if self.infile is not None:
             self.infile.close()
             self.infile = None
         
+    def findMaximum(self):
+        maximum = 0
+        while True:
+            nextMaximum = self.maximumLine()
+            if nextMaximum is None:
+                break
+            if nextMaximum > maximum:
+                maximum = nextMaximum
+        ## reset
+        self.finish()
+        self.start()
+        return maximum
+
+    def maximumLine(self):
+        eof = True
+        maximum = 0
+        for line in self.infile:
+            eof = False
+            self.lineCount += 1
+            line = trim(line)
+            if len(line) == 0:
+                continue
+            if line[0] == '*':
+                continue
+            command = line[0]
+            if command != 'i':
+                continue
+            cline  = trim(line[1:])
+            pos = cline.find(';')
+            if pos < 0:
+                raise PbipException("", "File %s Line %d: No semicolon found" % (self.fname, self.lineCount))
+            cstring = cline[:pos]
+            hstring = cline[pos+1:]
+            try:
+                clist = parseOpb(cstring)
+            except PbipException as ex:
+                raise PbipException("", "File %s Line %d: %s" % (self.fname, self.lineCount, str(ex)))
+            for con in clist:
+                for var in con.nz.keys():
+                    maximum = max(maximum, var)
+        if eof:
+            return None
+        else:
+            return maximum
 
     # Return (command, list of PB constraints, list of hints, list of preceding comments)
     def readLine(self):
@@ -282,7 +329,7 @@ class Pbip:
     # (None, None).   Running bddOnly mode or constraint is not clausal
     tclauseList = []
     maxBddSize = 0
-    maxCoefficient = 0
+    maxConstant = 0
     lastClauseCount = 0
 
     # Enable use as constraint system
@@ -291,8 +338,8 @@ class Pbip:
     litMap = {}
     varMap = {}
     levelMap = {}
-    
-    def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly):
+
+    def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly, reorder):
         self.verbLevel = verbLevel
         self.bddOnly = bddOnly
         self.valid = True
@@ -308,18 +355,22 @@ class Pbip:
             clauseCount += 1
             self.prover.createClause(clause, [], "Input clause %d" % clauseCount, isInput = True)
         self.prover.inputDone()
+        inputCount = self.preader.findMaximum()
+        varOrder = list(range(1, self.creader.nvar+1))
+        if reorder:
+            varOrder = self.creader.orderVariables(inputCount)
         self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.creader.nvar+1, verbLevel = verbLevel)
         self.litMap = {}
-        for level in range(1, self.creader.nvar+1):
-            var = self.manager.newVariable(name = "V%d" % level)
+        for id in varOrder:
+            var = self.manager.newVariable(name = "V%d" % id, id = id)
             t = self.manager.literal(var, 1)
-            self.litMap[ level] = t
+            self.litMap[ id] = t
             e = self.manager.literal(var, 0)
-            self.litMap[-level] = e
+            self.litMap[-id] = e
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
         self.maxBddSize = 0
-        self.maxCoefficient = 0
+        self.maxConstant = 0
         self.deltaClauses()
 
 
@@ -350,7 +401,7 @@ class Pbip:
                 tclause = None
         self.tclauseList.append((tclause, tcid))
         for con in clist:
-            self.maxCoefficient = max(self.maxCoefficient, con.maxCoefficient())
+            self.maxConstant = max(self.maxConstant, abs(con.variableNormalizedCval()))
         if not clauseOnly:
             for con in clist:
                 con.buildBdd(self)
@@ -679,7 +730,7 @@ class Pbip:
         if not decided:
             print("PBIP Final status unknown")
         print("PBIP Results:")
-        print("  Maximum Coefficient = %d" % self.maxCoefficient)
+        print("  Maximum Constraint RHS = %d" % self.maxConstant)
         print("  Maximum BDD size = %d" % self.maxBddSize)
         print("BDD Results:")
         self.manager.summarize()

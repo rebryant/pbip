@@ -9,11 +9,11 @@ import solver
 import pbip
 
 def usage(name):
-    print("Usage %s: [-h] [-v VERB] [-b] [-R] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
+    print("Usage %s: [-h] [-v VERB] [-b] [-r] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
     print("  -h              Print this message")
     print("  -v VERB         Set verbosity level")
     print("  -b              Pure BDD mode.  Don't make use of clausal representations")
-    print("  -R              Don't rename variables")
+    print("  -r              Rename variables to improve variable ordering")
     print("  -i INFILE.ipbip Input PBIP file (with unhinted inputs)")
     print("  -o OUTFILE.pbip Output PBIP file (with hints)")
     print("  -c OUTFILE.cnf  Output CNF file")
@@ -291,20 +291,20 @@ class CnfGenerator:
 def run(name, argList):
     verbLevel = 1
     bddOnly = False
-    rename = True
+    rename = False
     cnfName = ""
     inPbipName = ""
     outPbipName = ""
 
-    optlist, args = getopt.getopt(argList, "hbRv:c:i:o:")
+    optlist, args = getopt.getopt(argList, "hbrv:c:i:o:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
         elif opt == '-b':
             bddOnly = True
-        elif opt == '-R':
-            rename = False
+        elif opt == '-r':
+            rename = True
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':

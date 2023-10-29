@@ -152,6 +152,42 @@ class CnfReader():
         if clauseCount != nclause:
             raise CnfException("Line %d: Got %d clauses.  Expected %d" % (lineNumber, clauseCount, nclause))
 
+    # Order variables so that each non-input variable is placed right after
+    # least-numbered input variable in which both occur in some clause
+    def orderVariables(self, inputCount):
+        # Associate each non-input variable with the lowest-numbered variable for which both occur in some clause
+        varBucket = {}
+        inputSet = set(range(1,inputCount+1))
+        allVars = set([])
+        for (clause) in self.clauses:
+            vars = [abs(lit) for lit in clause]
+            mvar = min(vars)
+            for var in vars:
+                allVars.add(var)
+                if var in inputSet:
+                    continue
+                elif var in varBucket:
+                    varBucket[var] = min(mvar, varBucket[var])
+                else:
+                    varBucket[var] = mvar
+        # Generate list of variables associated with each input variable
+        mvarMap = { mvar : [] for mvar in inputSet } 
+        for (var, mvar) in varBucket.items():
+            mvarMap[mvar].append(var)
+
+        result = []
+        for ivar in range(1, inputCount+1):
+            result.append(ivar)
+            allVars.remove(ivar)
+            rest = sorted(mvarMap[ivar])
+            result += rest
+            for var in rest:
+                allVars.remove(var)
+        result += sorted(allVars)
+        if self.verbLevel >= 3:
+            slist = [str(r) for r in result]
+            print("Variable ordering: %s" % " ".join(slist))
+        return result
 
 # Abstract representation of Boolean function
 class Term:
