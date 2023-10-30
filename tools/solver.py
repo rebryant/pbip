@@ -26,6 +26,8 @@ import datetime
 import random
 import signal
 
+import random
+
 import bdd
 import resolver
 import stream
@@ -85,9 +87,18 @@ class LevelNode:
         self.id = id
         self.level = level
         self.position = position
+        self.upNeighbors = set([])
+        self.downNeighbors = set([])
+
 
     def __str__(self):
         return "N%d[%d]" % (self.id, self.level)
+
+    def addNeighbor(self, other):
+        if other.level < self.level:
+            self.upNeighbors.add(other)
+        elif other.level > self.level:
+            self.downNeighbors.add(other)
 
 class LevelGraph:
     # Mapping from node IDs to nodes
@@ -108,7 +119,6 @@ class LevelGraph:
         node = LevelNode(id, level, position)
         self.nodeMap[id] = node
         self.levelNodes[level].add(node)
-#        print("Added level node %s" % str(node))
 
     def getNode(self, id):
         if id in self.nodeMap:
@@ -118,51 +128,55 @@ class LevelGraph:
     def addEdge(self, id1, id2):
         n1 = self.getNode(id1)
         n2 = self.getNode(id2)
-        if (n1.level > n2.level):
-            n1, n2 = n2, n1
-        n1.downNeighbors.add(n2)
-        n2.upNeighbors.add(n1)
+        n1.addNeighbor(n2)
+        n2.addNeighbor(n1)
+        
         self.edgeCount += 1
-#        print("Added level edge (%s,%s)" % (str(n1), str(n2)))
 
     def wpos(self, node):
-        denom = len(self.levelNodes[node.level])
-        return node.position/denom
+        denom = len(self.levelNodes[node.level])+1
+        wt = node.position/denom
+        return wt
 
-    def getList(self, level):
+    def getNodes(self, level):
         nodes = sorted(self.levelNodes[level], key = lambda n : n.position)
+        return nodes
+
+    def getIds(self, level):
+        nodes = self.getNodes(level)
         return [node.id for node in nodes]
+
+    # Measure node's imbalance wrt its upward and downward neighbors
+    def nodeError(self, node, upbias):
+        upsum = sum([self.wpos(nbr) for nbr in node.upNeighbors])
+        uplen = len(node.upNeighbors)
+        upval = 0 if uplen == 0 else upsum/uplen
+        downsum = sum([self.wpos(nbr) for nbr in node.downNeighbors])
+        downlen = len(node.downNeighbors)
+        downval = 0 if downlen == 0 else downsum/downlen
+        if uplen == 0:
+            wt = downval
+        elif downlen == 0:
+            wt = upval
+        else:
+            wt = (upbias * upval + (1-upbias) * downval)
+        return wt
 
     # Reorder nodes at level according to positions of upward and/or downward neighbors
     # When upbias = 0, then weight entirely based on downward neighbors
     # When upbias = 1, then weight entirely based on upward neighbors
     # Intermediate biases use average of two
     def arrangeLevel(self, level, upbias):
-        olist = sorted(self.levelNodes[level], key = lambda n : n.position)
-        oslist = [str(node) for node in olist]
         tups = []
         for node in self.levelNodes[level]:
-            upsum = sum([self.wpos(nbr) for nbr in node.upNeighbors])
-            uplen = len(node.upNeighbors)
-            upval = 0 if uplen == 0 else upsum/uplen
-            downsum = sum([self.wpos(nbr) for nbr in node.downNeighbors])
-            downlen = len(node.downNeighbors)
-            downval = 0 if downlen == 0 else downsum/downlen
-            if upval == 0.0:
-                nwt = downval
-            elif downval == 0.0:
-                nwt = upval
-            else:
-                nwt = (upbias * upval + (1-upbias) * downval)
-            tups.append((nwt, node))
+            wt = self.nodeError(node, upbias)
+            tups.append((wt, node))
         tups.sort(key = lambda t : t[0])
+        slist = ["%s:%.4f" % (str(t[1]),t[0]) for t in tups]
         npos = 1
         for t in tups:
             t[1].position = npos
-            npos += 0
-        nlist = sorted(self.levelNodes[level], key = lambda n : n.position)
-        nslist = [str(node) for node in nlist]
-
+            npos += 1
 
     # Measure penalty for nodes at level according to positions of upward and/or downward neighbors
     # When upbias = 0, then weight entirely based on downward neighbors
@@ -171,19 +185,8 @@ class LevelGraph:
     def measureLevel(self, level, upbias):
         totalError = 0.0
         for node in self.levelNodes[level]:
-            upsum = sum([self.wpos(nbr) for nbr in node.upNeighbors])
-            uplen = len(node.upNeighbors)
-            upval = 0 if uplen == 0 else upsum/uplen
-            downsum = sum([self.wpos(nbr) for nbr in node.downNeighbors])
-            downlen = len(node.downNeighbors)
-            downval = 0 if downlen == 0 else downsum/downlen
-            if upval == 0.0:
-                nwt = downval
-            elif downval == 0.0:
-                nwt = upval
-            else:
-                nwt = (upbias * upval + (1-upbias) * downval)
-            totalError += abs(node.position - nwt)
+            wt = self.nodeError(node, upbias)
+            totalError += abs(node.position - wt)
         denom = len(self.levelNodes[level])
         return 0 if denom == 0 else totalError/denom
 
@@ -209,13 +212,40 @@ class LevelGraph:
                 node.position = npos
                 npos += 1
 
+    def initialScramble(self):
+        for level in self.levelList:
+            nlist = list(self.levelNodes[level])
+            random.shuffle(nlist)
+            npos = 1
+            for node in nlist:
+                node.position = npos
+                npos += 1
+            
+
     def run(self, count, startBias, endBias, verbose = False):
         if verbose:
+            print("Nodes:")
+            for level in self.levelList:
+                print("  Level %d:" % level)
+                nlist = self.getNodes(level)
+                for node in nlist:
+                    uslist = [str(nbr) for nbr in node.upNeighbors]
+                    dslist = [str(nbr) for nbr in node.downNeighbors]
+                    print("    Node %s.  Up neighbors = %s.  Down Neighbors = %s" % (str(node), " ".join(uslist), " ".join(dslist)))
             print("Rearranging %s nodes across %d levels (%d edges)" % (len(self.nodeMap), len(self.levelList), self.edgeCount))
-            print("    Initial   Score = %.4f" % self.score())
-            self.initialSort()
             print("    After sorting.  Score = %.4f" % self.score())
+            self.initialScramble()
+            print("    After scrambling.  Score = %.4f" % self.score())
+            for level in self.levelList:
+                slist = [str(n) for n in self.getNodes(level)]
+                print("Level %d.  Nodes = %s" % (level, " ".join(slist)))
+
+        else:
+            self.initialSort()
+            #        self.initialScramble()
         for step in range(count):
+            if verbose:
+                print("Performing step %d" % (step+1))
             wt = step/(count-1) if count > 0 else 0
             bias = (1-wt) * startBias + wt * endBias
             self.downPass(bias)
@@ -349,20 +379,19 @@ class CnfReader():
         for (var,ovar) in varPairs:
             lgraph.addEdge(var, ovar)
 
-        # This is where to optimize
-        lgraph.run(0, 0.9, 0.1, True)
+        lgraph.run(5, 0.9, 0.1, False)
 
         result = []
         for ivar in range(1, inputCount+1):
             result.append(ivar)
             allVars.remove(ivar)
-            rest = lgraph.getList(ivar)
+            rest = lgraph.getIds(ivar)
             print("Level %d vars: %s" % (ivar, str(rest)))
             result += rest
             for var in rest:
                 allVars.remove(var)
         result += sorted(allVars)
-        if self.verbLevel >= 3:
+        if self.verbLevel >= 2:
             slist = [str(r) for r in result]
             print("Variable ordering: %s" % " ".join(slist))
         return result
@@ -372,14 +401,12 @@ class Term:
 
     manager = None
     root = None
-#    support = None    # Variables in support represented by clause (omitted)
     size = 0
     validation = None # Clause id providing validation
 
     def __init__(self, manager, root, validation):
         self.manager = manager
         self.root = root
-#        self.support = self.manager.getSupport(root)
         self.size = self.manager.getSize(root)
         self.validation = validation
 
