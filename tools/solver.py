@@ -64,6 +64,165 @@ def trim(s):
         s = s[:-1]
     return s
 
+class LevelException(Exception):
+
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return "Level Graph Exception: " + str(self.value)
+
+# Code to arrange the variables within a level
+# Used to improve the variable ordering for the extension variables in levelized BDDs
+class LevelNode:
+    id = None
+    level = 0
+    upNeighbors = set([])
+    downNeighbors = set([])
+    position = 0
+
+    def __init__(self, id, level, position):
+        self.id = id
+        self.level = level
+        self.position = position
+
+    def __str__(self):
+        return "N%d[%d]" % (self.id, self.level)
+
+class LevelGraph:
+    # Mapping from node IDs to nodes
+    nodeMap = {}
+    levelNodes = {}
+    levelList = []
+    edgeCount = 0
+
+    def __init__(self, levels):
+        nodeMap = {}
+        self.levelNodes = {}
+        self.levelList = sorted(levels)
+        for level in self.levelList:
+            self.levelNodes[level] = set([])
+
+    def addNode(self, id, level):
+        position = len(self.levelNodes[level]) + 1
+        node = LevelNode(id, level, position)
+        self.nodeMap[id] = node
+        self.levelNodes[level].add(node)
+#        print("Added level node %s" % str(node))
+
+    def getNode(self, id):
+        if id in self.nodeMap:
+            return self.nodeMap[id]
+        raise LevelException("No level node with id %d in graph")
+
+    def addEdge(self, id1, id2):
+        n1 = self.getNode(id1)
+        n2 = self.getNode(id2)
+        if (n1.level > n2.level):
+            n1, n2 = n2, n1
+        n1.downNeighbors.add(n2)
+        n2.upNeighbors.add(n1)
+        self.edgeCount += 1
+#        print("Added level edge (%s,%s)" % (str(n1), str(n2)))
+
+    def wpos(self, node):
+        denom = len(self.levelNodes[node.level])
+        return node.position/denom
+
+    def getList(self, level):
+        nodes = sorted(self.levelNodes[level], key = lambda n : n.position)
+        return [node.id for node in nodes]
+
+    # Reorder nodes at level according to positions of upward and/or downward neighbors
+    # When upbias = 0, then weight entirely based on downward neighbors
+    # When upbias = 1, then weight entirely based on upward neighbors
+    # Intermediate biases use average of two
+    def arrangeLevel(self, level, upbias):
+        olist = sorted(self.levelNodes[level], key = lambda n : n.position)
+        oslist = [str(node) for node in olist]
+        tups = []
+        for node in self.levelNodes[level]:
+            upsum = sum([self.wpos(nbr) for nbr in node.upNeighbors])
+            uplen = len(node.upNeighbors)
+            upval = 0 if uplen == 0 else upsum/uplen
+            downsum = sum([self.wpos(nbr) for nbr in node.downNeighbors])
+            downlen = len(node.downNeighbors)
+            downval = 0 if downlen == 0 else downsum/downlen
+            if upval == 0.0:
+                nwt = downval
+            elif downval == 0.0:
+                nwt = upval
+            else:
+                nwt = (upbias * upval + (1-upbias) * downval)
+            tups.append((nwt, node))
+        tups.sort(key = lambda t : t[0])
+        npos = 1
+        for t in tups:
+            t[1].position = npos
+            npos += 0
+        nlist = sorted(self.levelNodes[level], key = lambda n : n.position)
+        nslist = [str(node) for node in nlist]
+
+
+    # Measure penalty for nodes at level according to positions of upward and/or downward neighbors
+    # When upbias = 0, then weight entirely based on downward neighbors
+    # When upbias = 1, then weight entirely based on upward neighbors
+    # Intermediate biases use average of two
+    def measureLevel(self, level, upbias):
+        totalError = 0.0
+        for node in self.levelNodes[level]:
+            upsum = sum([self.wpos(nbr) for nbr in node.upNeighbors])
+            uplen = len(node.upNeighbors)
+            upval = 0 if uplen == 0 else upsum/uplen
+            downsum = sum([self.wpos(nbr) for nbr in node.downNeighbors])
+            downlen = len(node.downNeighbors)
+            downval = 0 if downlen == 0 else downsum/downlen
+            if upval == 0.0:
+                nwt = downval
+            elif downval == 0.0:
+                nwt = upval
+            else:
+                nwt = (upbias * upval + (1-upbias) * downval)
+            totalError += abs(node.position - nwt)
+        denom = len(self.levelNodes[level])
+        return 0 if denom == 0 else totalError/denom
+
+    def score(self):
+        totalError = 0.0
+        for level in self.levelList:
+            totalError += self.measureLevel(level, 0.5)
+        return totalError/len(self.levelList)
+
+    def downPass(self, bias):
+        for level in self.levelList:
+            self.arrangeLevel(level, bias)
+            
+    def upPass(self, bias):
+        for level in reversed(self.levelList):
+            self.arrangeLevel(level, 1-bias)
+            
+    def initialSort(self):
+        for level in self.levelList:
+            nlist = sorted(self.levelNodes[level], key = lambda n : n.id)
+            npos = 1
+            for node in nlist:
+                node.position = npos
+                npos += 1
+
+    def run(self, count, startBias, endBias, verbose = False):
+        if verbose:
+            print("Rearranging %s nodes across %d levels (%d edges)" % (len(self.nodeMap), len(self.levelList), self.edgeCount))
+            print("    Initial   Score = %.4f" % self.score())
+            self.initialSort()
+            print("    After sorting.  Score = %.4f" % self.score())
+        for step in range(count):
+            wt = step/(count-1) if count > 0 else 0
+            bias = (1-wt) * startBias + wt * endBias
+            self.downPass(bias)
+            self.upPass(bias)
+            if verbose:
+                print("    Step %d.  Bias = %.4f.  Score = %.4f" % (step+1, bias, self.score()))
+
 class CnfException(Exception):
 
     def __init__(self, value):
@@ -157,29 +316,48 @@ class CnfReader():
     def orderVariables(self, inputCount):
         # Associate each non-input variable with the lowest-numbered variable for which both occur in some clause
         varBucket = {}
-        inputSet = set(range(1,inputCount+1))
+        levelSet = set(range(1, inputCount+1))
         allVars = set([])
-        for (clause) in self.clauses:
+        # Non-input variables that occur together in single clause
+        varPairs = set([])
+        for clause in self.clauses:
             vars = [abs(lit) for lit in clause]
             mvar = min(vars)
+            if mvar > inputCount:
+                continue
             for var in vars:
                 allVars.add(var)
-                if var in inputSet:
+                if var in levelSet:
                     continue
                 elif var in varBucket:
-                    varBucket[var] = min(mvar, varBucket[var])
+                    varBucket[var] = max(mvar, varBucket[var])
                 else:
                     varBucket[var] = mvar
+                for ovar in vars:
+                    if ovar in levelSet:
+                        continue
+                    if ovar == var:
+                        continue
+                    tup = (min(var,ovar), max(var,ovar))
+                    varPairs.add(tup)
+
         # Generate list of variables associated with each input variable
-        mvarMap = { mvar : [] for mvar in inputSet } 
+        # Create level graph
+        lgraph = LevelGraph(levelSet)
         for (var, mvar) in varBucket.items():
-            mvarMap[mvar].append(var)
+            lgraph.addNode(var, mvar)
+        for (var,ovar) in varPairs:
+            lgraph.addEdge(var, ovar)
+
+        # This is where to optimize
+        lgraph.run(0, 0.9, 0.1, True)
 
         result = []
         for ivar in range(1, inputCount+1):
             result.append(ivar)
             allVars.remove(ivar)
-            rest = sorted(mvarMap[ivar])
+            rest = lgraph.getList(ivar)
+            print("Level %d vars: %s" % (ivar, str(rest)))
             result += rest
             for var in rest:
                 allVars.remove(var)
