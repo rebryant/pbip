@@ -13,9 +13,9 @@ Two reasoning modes are supported:
   from one or two previous constraints.
 
 * Reverse unit propagation (RUP) mode, where the validity of a
-  constraint by contradiction.  That is, a series of unit propagations
-  are performed based on the complement of the constraint and other
-  constraints until a contradiction is reached.
+  constraint is proved by contradiction.  That is, a series of unit
+  propagations are performed based on the complement of the constraint
+  and other constraints until a contradiction is reached.
 
 The format assumes that each input constraint is encoded as a set of
 clauses in conjunctive normal form (CNF).  The clauses for all of the
@@ -29,7 +29,7 @@ P_1, the constraints must satisfy P_1 ==> P.  For P to follow from P_1
 and P_2, the constraints must satisfy P_1 & P_2 ==> P.  An antecedent
 constraint can be any of the following: an input constraint, one
 proved by an implication step, or the target constraint of a completed
-counterfactual reasoning sequence.
+RUP reasoning sequence.
 
 When in RUP mode, the constraint to be derived is set as a target, and
 a (initially empty) set of unit constraints is accumulated.  Each RUP
@@ -74,7 +74,7 @@ There are four types of lines:
    ..., Lk.  C can either be the ID of a previous constraint, or it
    can be that of the current constraint.  The latter case is known as
    a "self reference", and its unit propagations should be based on
-   the negation of the target constraint.  The final list is qof the
+   the negation of the target constraint.  The final list is of the
    form [C], and it must be falsified by the accumulated set of
    literals.
  
