@@ -509,6 +509,15 @@ class Manager:
                 ilist.append(id)
         return ilist
 
+    def getSupportLevels(self, node):
+        varDict = self.buildInformation(node, lambda n: n.variable.level, {})
+        fullList = sorted(varDict.values())
+        ilist = []
+        for id in fullList:
+            if (len(ilist) == 0 or ilist[-1] != id) and id > 0:
+                ilist.append(id)
+        return ilist
+
     def getSize(self, node):
         oneDict = self.buildInformation(node, lambda n: 1, {})
         return len(oneDict)
