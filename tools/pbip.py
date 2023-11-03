@@ -346,7 +346,7 @@ class LayerTerm:
         if len(literals) == 0:
             return literals, 0
         else:
-            return literals[:-1], literals[-1]
+            return tuple(literals[:-1]), literals[-1]
 
     def fromInputClause(self, literals, id):
         tup = self.orderLiterals(literals)
@@ -451,8 +451,7 @@ class LayerTerm:
             return True
         elif len(other.head) == 0 and self.tail == self.pbip.manager.leaf0:
             return True
-        else:
-            return False
+        return False
 
     # Combine head of one term with tail of other
     def resolve(self, other):
@@ -460,7 +459,7 @@ class LayerTerm:
         nhead, nliteral,  = self.newHead(ahead)
         ntail = self.tail if self.tail != self.pbip.manager.leaf0 else other.tail
         vclause = list(ahead) + [ntail.id]
-        comment = "Resolve terms %s and %s" % (str(self), str(other))
+        comment = "Resolve cross terms %s and %s" % (str(self), str(other))
         antecedents = [self.validation, other.validation]
         validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
         return LayerTerm(self.pbip, nhead, nliteral, ntail, validation)
@@ -777,6 +776,8 @@ class Pbip:
                     for nlt in negTerms:
                         if plt.resolvable(nlt):
                             nterm = plt.resolve(nlt)
+                            if nterm is None:
+                                continue
                             if self.verbLevel >= 4:
                                 print("  Generated term %s" % str(nterm))
                             self.placeInLayerBucket(buckets, nterm)
@@ -788,6 +789,8 @@ class Pbip:
             bucketItems = bucketItems[2:]
             nterm = lt1.tailMerge(lt2)
             bucketItems.append(nterm)
+        if len(bucketItems) < 1:
+            raise LayerTermException("Layered reduction failed.  Bucket 0 empty")
         rt = bucketItems[0]
         return rt.tail, rt.validation
 
