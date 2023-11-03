@@ -338,6 +338,7 @@ class Pbip:
     litMap = {}
     varMap = {}
     levelMap = {}
+    idMap = {}
 
     def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly, reorder):
         self.verbLevel = verbLevel
@@ -369,6 +370,8 @@ class Pbip:
             self.litMap[-id] = e
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
+        self.idMap = { var.level : var.id for var in self.manager.variables }
+        self.idMap[0] = 0
         self.maxBddSize = 0
         self.maxConstant = 0
         self.deltaClauses()
@@ -460,10 +463,11 @@ class Pbip:
 
 
     def placeInBucket(self, buckets, root, validation):
-        supportIds = self.manager.getSupportIds(root)
-        for id in supportIds:
-            if id in buckets:
-                buckets[id].append((root, validation))
+        supportLevels = self.manager.getSupportLevels(root)
+        supportLevels.reverse()
+        for level in supportLevels:
+            if level in buckets:
+                buckets[level].append((root, validation))
                 return
         buckets[0].append((root, validation))
 
@@ -499,27 +503,32 @@ class Pbip:
         validation = self.manager.prover.createClause([nroot.id], antecedents, comment)
         return nroot, validation
 
-    # Bucket reduction assumes all external variables come first in variable ordering
+    # Bucket reduction based on variable levels
     def bucketReduce(self, buckets):
-        ids = sorted(list(buckets.keys()))
-        if ids[0] == 0:
-            ids = ids[1:] + [0]
-        for id in ids:
+        levels = sorted(list(buckets.keys()))
+        levels.reverse()
+        if levels[0] == 0:
+            levels = levels[1:]
+        if levels[-1] != 0:
+            levels = levels + [0]
+        for level in levels:
+            id = self.idMap[level]
             if self.verbLevel >= 4:
-                print("PBIP: Processing bucket #%d.  Size = %d" % (id, len(buckets[id])))
-            while len(buckets[id]) > 1:
-                (r1,v1) = buckets[id][0]
-                (r2,v2) = buckets[id][1]
-                buckets[id] = buckets[id][2:]
+                var = self.varMap[id] if id > 0 else "TOP"
+                print("PBIP: Processing bucket #%d (variable %s).  Size = %d" % (level, str(var), len(buckets[level])))
+            while len(buckets[level]) > 1:
+                (r1,v1) = buckets[level][0]
+                (r2,v2) = buckets[level][1]
+                buckets[level] = buckets[level][2:]
                 nroot,validation = self.conjunctTerms(r1, v1, r2, v2)
                 self.placeInBucket(buckets, nroot, validation)
-            if len(buckets[id]) == 1:
-                root, validation = buckets[id][0]
-                if id == 0:
+            if len(buckets[level]) == 1:
+                root, validation = buckets[level][0]
+                if level == 0:
                     return (root, validation)
                 nroot, nvalidation = self.quantifyRoot(root, validation, id)
                 if self.verbLevel >= 4:
-                    print("PBIP: Processed bucket #%d.  Root = %s" % (id, root.label()))
+                    print("PBIP: Processed bucket #%d.  Root = %s" % (level, root.label()))
                 self.placeInBucket(buckets, nroot, nvalidation)
         raise PbipException("", "Unexpected exit from bucketReduce.  buckets = %s" % str(buckets))
 
@@ -546,7 +555,7 @@ class Pbip:
                 externalIdSet.add(id)
         # Set up buckets containing trusted BDD representations of clauses
         # Each tbdd is pair (root, validation)
-        # Indexed by variable id
+        # Indexed by variable level
         # Special bucket 0 for terms that depend only on external variables
         buckets = { 0 : []}
 
@@ -560,7 +569,9 @@ class Pbip:
                 id = ivar
                 if id not in externalIdSet and id not in internalIdSet:
                     internalIdSet.add(id)
-                    buckets[id] = []
+                    bddVar = self.varMap[id]
+                    level = bddVar.level
+                    buckets[level] = []
             self.placeInBucket(buckets, root, validation)
         (broot, bvalidation) = self.bucketReduce(buckets)
         root = self.tbddList[pid-1][0]

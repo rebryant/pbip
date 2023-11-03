@@ -382,14 +382,16 @@ class CnfReader():
         lgraph.run(5, 0.9, 0.1, False)
 
         result = []
-        for ivar in range(1, inputCount+1):
-            result.append(ivar)
-            allVars.remove(ivar)
+        ilist = list(range(1, inputCount+1))
+        llist = ilist
+        for ivar in llist:
             rest = lgraph.getIds(ivar)
             print("Level %d vars: %s" % (ivar, str(rest)))
             result += rest
+            result.append(ivar)
             for var in rest:
                 allVars.remove(var)
+            allVars.remove(ivar)
         result += sorted(allVars)
         if self.verbLevel >= 2:
             slist = [str(r) for r in result]
