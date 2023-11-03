@@ -82,6 +82,9 @@ def showClause(clause):
         return "TAUT"
     return str(clause)
 
+def cleanHint(hint):
+    return [id for id in hint if id != tautologyId]
+
 class ResolveException(Exception):
 
     def __init__(self, value):

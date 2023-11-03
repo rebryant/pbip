@@ -308,6 +308,163 @@ class PbipReader:
                 print("PBIP:   Hints: %s" % str(hlist))
         return (command, clist, hlist, comlist)
 
+class LayerTermException(Exception):
+    valid = None
+
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return "LayerTerm Exception: " + str(self.value)
+
+
+# Generalization of term for use in converting layered CNF into BDDs
+class LayerTerm:
+    pbip = None # Pointer to PBIP information
+    head = []   # Head clause (list of integers)
+    literal = 0  # Splitting literal (integer) (0 indicates no literal and must have head == [])
+    tail = None # BDD representation of conjoined terms
+    validation = None # Clause Id for head + [var] + [tail.validation]
+
+    def __init__(self, pbip, head = [], literal = 0, tail = None, validation = None):
+        self.pbip = pbip
+        self.head = head
+        self.literal = literal
+        self.tail = self.pbip.manager.leaf0 if tail is None else tail
+        self.validation = 0 if validation is None else validation
+
+    def __str__(self):
+        return "T<%s, %d, %s, %d>" % (str(list(self.head)), self.literal, self.tail.label(), self.validation)
+
+    def litLevel(self, ilit):
+        return self.pbip.idToLevel(abs(ilit))
+
+    def orderLiterals(self, literals):
+        return tuple(sorted(literals, key = lambda lit: self.litLevel(lit)))
+
+    def newHead(self, literals):
+        if len(literals) == 0:
+            return literals, 0
+        else:
+            return literals[:-1], literals[-1]
+
+    def fromInputClause(self, literals, id):
+        tup = self.orderLiterals(literals)
+        self.head, self.literal = self.newHead(tup)
+        self.tail = self.pbip.manager.leaf0
+        self.validation = id
+        return self
+
+    # Merge terms having identical heads and literals
+    # Only used with empty head?
+    def tailMerge(self, other):
+        ## Must have identical head and literal
+        if self.head != other.head:
+            raise LayerTermException("Cannot merge tuples %s and %s.  Heads differ" % (str(self), str(other)))
+        if self.literal != other.literal:
+            raise LayerTermException("Cannot merge tuples %s and %s.  Literals differ" % (str(self), str(other)))
+        if self.tail == self.pbip.manager.leaf0:
+            if self.validation == 0 and other.tail == self.pbip.manager.leaf0:
+                nroot, validation = other.tail, other.validation
+            else:
+                nroot, validation = self.tail, self.validation
+        elif other.tail == self.pbip.manager.leaf0:
+            nroot, validation = other.tail, other.validation
+        elif self.tail == self.pbip.manager.leaf1:
+            nroot, validation = other.tail, other.validation
+        elif other.tail == self.pbip.manager.leaf1:
+            nroot, validation = self.tail, self.validation            
+        elif self.tail == other.tail:
+            nroot, validation = self.tail, self.validation
+        else:
+            nroot, jclause = self.pbip.manager.applyAndJustify(self.tail, other.tail)
+            if self.literal == 0:
+                vclause = list(self.head) + [nroot.id]
+            else:
+                vclause = list(self.head) + [self.literal, nroot.id]
+            comment = "Tail merge.  Head = %s. Literal = %d" % (str(self.head), self.literal)
+            antecedents = [self.validation, other.validation, jclause]
+            validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
+        return LayerTerm(self.pbip, self.head, self.literal, nroot, validation)
+        
+    # Resolution of two tails.  Heads should match
+    # Merge terms having identical heads and opposite literals
+    def join(self, other, project=False):
+        if self.literal != -other.literal:
+            raise LayerTermException("Cannot resolve terms %s and %s.  Non-matching literals %d and %d" % (str(self), str(other), self.literal, other.literal))
+        if self.head != other.head:
+            raise LayerTermException("Cannot resolve terms %s and %s.  Different heads" % (str(self), str(other)))
+        nhead, nliteral = self.newHead(self.head)
+        if project:
+            raise LayerTermException("Should not join terms %s and %s: Projection variable" % (str(self), str(other)))
+#            ntail = self.pbib.manager.applyOr(self.tail, other.tail)
+#            vclause = list(nhead) + [ntail.id]
+#            jself = self.pbip.manager.justifyImply(self.tail, ntail)
+#            jother = self.pbip.manager.justifyImply(other.tail, ntail)
+#            comment = "Projecting join of terms %s and %s" % (str(self), str(other))
+#            antecedents = [jself, jother, self.validation, other.validation]
+#            validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
+        else:
+            ivar = abs(self.literal)
+            var = self.pbip.varMap[ivar]
+            if self.literal < 0:
+                tchild = self.tail
+                echild = other.tail
+                tvalidation = self.validation
+                evalidation = other.validation
+            else:
+                tchild = other.tail
+                echild = self.tail
+                tvalidation = other.validation
+                evalidation = self.validation
+            ntail = self.pbip.manager.findOrMake(var, tchild, echild)
+            vclause = list(self.head) + [ntail.id]
+            hints = {}
+            hints["WHU"] = (ntail.idHU(), resolver.cleanClause(list(nhead) + [-ivar, -tchild.id, ntail.id]))
+            hints["WLU"] = (ntail.idLU(), resolver.cleanClause(list(nhead) + [ ivar, -echild.id, ntail.id]))
+            hints["OPH"] = (tvalidation,  resolver.cleanClause(list(nhead) + [-ivar, tchild.id]))
+            hints["OPL"] = (evalidation,  resolver.cleanClause(list(nhead) + [ ivar, echild.id]))
+            comment = "Join of terms %s and %s with root variable %d" % (str(self), str(other), ivar)
+            validation = self.pbip.manager.vresolver.run(vclause, ivar, hints, comment)
+        return LayerTerm(self.pbip, nhead, nliteral, ntail, validation)
+
+    # Transfer literal from head to tail
+    def processLiteral(self):
+        ivar = abs(self.literal)
+        var = self.pbip.varMap[ivar]
+        nhead, nliteral = self.newHead(self.head)
+        if self.literal > 0:
+            ntail = self.pbip.manager.findOrMake(var, self.pbip.manager.leaf1, self.tail)
+            antecedents = resolver.cleanHint([ntail.idHU(), self.validation, ntail.idLU()])
+        else:
+            ntail = self.pbip.manager.findOrMake(var, self.tail, self.pbip.manager.leaf1)
+            antecedents = resolver.cleanHint([ntail.idLU(), self.validation, ntail.idHU()])
+        vclause = list(self.head) + [ntail.id]
+        comment = "Transfer literal %d from head to tail for term %s" % (self.literal, str(self))
+        validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
+        return LayerTerm(self.pbip, nhead, nliteral, ntail, validation)
+
+    def resolvable(self, other):
+        if self.literal != -other.literal:
+            return False
+        elif len(self.head) == 0 and other.tail == self.pbip.manager.leaf0:
+            return True
+        elif len(other.head) == 0 and self.tail == self.pbip.manager.leaf0:
+            return True
+        else:
+            return False
+
+    # Combine head of one term with tail of other
+    def resolve(self, other):
+        ahead = self.head if len(self.head) > 0 else other.head
+        nhead, nliteral,  = self.newHead(ahead)
+        ntail = self.tail if self.tail != self.pbip.manager.leaf0 else other.tail
+        vclause = list(ahead) + [ntail.id]
+        comment = "Resolve terms %s and %s" % (str(self), str(other))
+        antecedents = [self.validation, other.validation]
+        validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
+        return LayerTerm(self.pbip, nhead, nliteral, ntail, validation)
+
 class Pbip:
     verbLevel = 1
     bddOnly = False
@@ -375,6 +532,16 @@ class Pbip:
         self.maxBddSize = 0
         self.maxConstant = 0
         self.deltaClauses()
+
+    def idToLevel(self, id):
+        if id == 0:
+            return 0
+        return self.levelMap[id]
+
+    def levelToId(self, level):
+        if level == 0:
+            return 0
+        return self.idMap[level]
 
 
     def deltaClauses(self):
@@ -540,6 +707,101 @@ class Pbip:
             print("PBIP: Created BDD with root %s, validation %s for input clause #%d" % (root.label(), str(validation), id))
         return (root, validation)
 
+    def performBucketReduction(self, hlist, inputIdSet):
+        # Set up buckets containing trusted BDD representations of clauses
+        # Each tbdd is pair (root, validation)
+        # Indexed by variable level
+        # Special bucket 0 for terms that depend only on external variables
+        buckets = { 0 : []}
+        internalIdSet = set([])
+        for hid in hlist:
+            iclause = self.creader.clauses[hid-1]
+            root, validation = self.getInputClauseBdd(hid)
+            for lit in iclause:
+                ivar = abs(lit)
+                id = ivar
+                if id not in inputIdSet and id not in internalIdSet:
+                    internalIdSet.add(id)
+                    bddVar = self.varMap[id]
+                    level = bddVar.level
+                    buckets[level] = []
+            self.placeInBucket(buckets, root, validation)
+        (root, validation) = self.bucketReduce(buckets)
+        return (root, validation)
+
+
+    def placeInLayerBucket(self, buckets, lterm):
+        var = abs(lterm.literal)
+        level = self.idToLevel(var)
+        if level not in buckets:
+            buckets[level] = [lterm]
+        else:
+            buckets[level].append(lterm)
+        if self.verbLevel >= 4:
+            print("   Placed term %s in bucket %d (var %d)" % (str(lterm), level, var))
+
+    def layerBucketReduce(self, buckets, inputIdSet):
+        # Process from largest level to smallest
+        bucketItems = []
+        while len(buckets) > 0:
+            level = max(buckets.keys())
+            bucketItems = buckets[level]
+            del buckets[level]
+            if level == 0:
+                break
+            ivar = self.levelToId(level)
+            if self.verbLevel >= 3:
+                tstring = "I" if ivar in inputIdSet else "Z"
+                print("Processing bucket %d (Variable %s%d).  %d terms" % (level, tstring, ivar, len(bucketItems)))
+            if ivar in inputIdSet:
+                headDict = {}
+                for lt in bucketItems:
+                    if lt.head in headDict:
+                        headDict[lt.head].append(lt)
+                    else:
+                        headDict[lt.head] = [lt]
+                for head,bucketItems in headDict.items():
+                    if len(bucketItems) == 1:
+                        nterm = bucketItems[0].processLiteral()
+                    elif len(bucketItems) == 2:
+                        nterm = bucketItems[0].join(bucketItems[1])
+                    else:
+                        raise LayerTermException("Don't know how to combine %d terms for head %s and variable %d" % (len(bucketItems), str(head), ivar))
+                    if self.verbLevel >= 4:
+                        print("  Generated term %s" % str(nterm))
+                    self.placeInLayerBucket(buckets, nterm)
+            else:
+                posTerms = [lt for lt in bucketItems if lt.literal > 0]
+                negTerms = [lt for lt in bucketItems if lt.literal < 0]
+                for plt in posTerms:
+                    for nlt in negTerms:
+                        if plt.resolvable(nlt):
+                            nterm = plt.resolve(nlt)
+                            if self.verbLevel >= 4:
+                                print("  Generated term %s" % str(nterm))
+                            self.placeInLayerBucket(buckets, nterm)
+
+
+        while len(bucketItems) > 1:
+            lt1 = bucketItems[0]
+            lt2 = bucketItems[1]
+            bucketItems = bucketItems[2:]
+            nterm = lt1.tailMerge(lt2)
+            bucketItems.append(nterm)
+        rt = bucketItems[0]
+        return rt.tail, rt.validation
+
+    def performLayerReduction(self, hlist, inputIdSet):
+        # Set up buckets containing layer terms
+        # Special bucket 0 for terms that depend only on external variables
+        buckets = { 0 : []}
+        for hid in hlist:
+            iclause = self.creader.clauses[hid-1]
+            lterm = LayerTerm(self).fromInputClause(iclause, hid)
+            self.placeInLayerBucket(buckets, lterm)
+        (root, validation) = self.layerBucketReduce(buckets, inputIdSet)
+        return (root, validation)
+
     def doInput(self, pid, hlist):
         clist= self.constraintList[pid-1]
         if not self.bddOnly and len(hlist) == 1 and self.tclauseList[pid-1][0] is not None:
@@ -547,33 +809,18 @@ class Pbip:
             if self.verbLevel >= 2:
                 print("PBIP: Processed PBIP input #%d.  Represented by input clause #%d" % (pid, hlist[0]))
             return
-        externalIdSet = set([])
-        internalIdSet = set([])
+
+        inputIdSet = set([])
         for con in clist:
             for ivar in con.nz.keys():
                 id = ivar
-                externalIdSet.add(id)
-        # Set up buckets containing trusted BDD representations of clauses
-        # Each tbdd is pair (root, validation)
-        # Indexed by variable level
-        # Special bucket 0 for terms that depend only on external variables
-        buckets = { 0 : []}
+                inputIdSet.add(id)
 
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP Input #%d.  Input clauses %s" % (pid, str(hlist)))
-        for hid in hlist:
-            iclause = self.creader.clauses[hid-1]
-            root, validation = self.getInputClauseBdd(hid)
-            for lit in iclause:
-                ivar = abs(lit)
-                id = ivar
-                if id not in externalIdSet and id not in internalIdSet:
-                    internalIdSet.add(id)
-                    bddVar = self.varMap[id]
-                    level = bddVar.level
-                    buckets[level] = []
-            self.placeInBucket(buckets, root, validation)
-        (broot, bvalidation) = self.bucketReduce(buckets)
+#        (broot, bvalidation) = self.performBucketReduction(hlist, inputIdSet)
+        (broot, bvalidation) = self.performLayerReduction(hlist, inputIdSet)
+
         root = self.tbddList[pid-1][0]
         if root == broot:
             cid = bvalidation
