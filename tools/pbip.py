@@ -467,6 +467,7 @@ class LayerTerm:
 class Pbip:
     verbLevel = 1
     bddOnly = False
+    layerReduce = False
     valid = True
     creader = None
     preader = None
@@ -496,9 +497,10 @@ class Pbip:
     levelMap = {}
     idMap = {}
 
-    def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly, reorder):
+    def __init__(self, cnfName, pbipName, lratName, verbLevel, bddOnly, reorder, layerReduce):
         self.verbLevel = verbLevel
         self.bddOnly = bddOnly
+        self.layerReduce = layerReduce
         self.valid = True
         self.creader = solver.CnfReader(cnfName, verbLevel)
         self.preader = PbipReader(pbipName, verbLevel)
@@ -821,8 +823,11 @@ class Pbip:
 
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP Input #%d.  Input clauses %s" % (pid, str(hlist)))
-#        (broot, bvalidation) = self.performBucketReduction(hlist, inputIdSet)
-        (broot, bvalidation) = self.performLayerReduction(hlist, inputIdSet)
+        if self.layerReduce:
+            (broot, bvalidation) = self.performLayerReduction(hlist, inputIdSet)
+        else:
+            (broot, bvalidation) = self.performBucketReduction(hlist, inputIdSet)
+
 
         root = self.tbddList[pid-1][0]
         if root == broot:

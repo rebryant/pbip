@@ -7,10 +7,11 @@ import getopt
 import pbip
 
 def usage(name):
-    print("Usage %s: [-h] [-v VERB] [-b] [-R] -i FILE.cnf -p FILE.pbip [-o FILE.lrat]")
+    print("Usage %s: [-h] [-L] [-v VERB] [-b] [-R] -i FILE.cnf -p FILE.pbip [-o FILE.lrat]")
     print("  -h           Print this message")
     print("  -v VERB      Set verbosity level")
     print("  -b           Pure BDD mode.  Don't make use of clausal representations")
+    print("  -L           Disable layered processing of CNF.  Turn this on if labeled approach fails")
     print("  -R           Don't reorder variables.  (Not recommended)")
     print("  -i FILE.cnf  Input CNF file")
     print("  -p FILE.pbip Input proof file")
@@ -24,8 +25,9 @@ def run(name, argList):
     lratName = ""
     bddOnly = False
     reorder = True
+    layerReduce = True
 
-    optlist, args = getopt.getopt(argList, "hbRv:i:p:o:")
+    optlist, args = getopt.getopt(argList, "hbRLv:i:p:o:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -34,6 +36,8 @@ def run(name, argList):
             bddOnly = True
         elif opt == '-R':
             reorder = False
+        elif opt == '-L':
+            layerReduce = False
         elif opt == '-v':
             verbLevel = int(val)
         elif opt == '-i':
@@ -55,7 +59,7 @@ def run(name, argList):
         usage(name)
         return
     start = datetime.datetime.now()
-    pb = pbip.Pbip(cnfName, pbipName, lratName, verbLevel, bddOnly, reorder)
+    pb = pbip.Pbip(cnfName, pbipName, lratName, verbLevel, bddOnly, reorder, layerReduce)
     pb.run()
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds
