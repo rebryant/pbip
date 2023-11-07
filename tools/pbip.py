@@ -308,18 +308,20 @@ class PbipReader:
                 print("PBIP:   Hints: %s" % str(hlist))
         return (command, clist, hlist, comlist)
 
-class LayerTermException(Exception):
+#### Support for Symbolic Davis-Putnam (SDP) reduction
+class SdpTermException(Exception):
     valid = None
 
     def __init__(self, value):
         self.value = value
 
     def __str__(self):
-        return "LayerTerm Exception: " + str(self.value)
+        return "SDP Exception: " + str(self.value)
 
 
-# Generalization of term for use in converting layered CNF into BDDs
-class LayerTerm:
+# Term for use in converting CNF into BDDs via
+# symbolic Davis-Putnam reduction
+class SdpTerm:
     pbip = None # Pointer to PBIP information
     head = tuple([])   # Head clause (list of integers).  Must be tuple.  Ascending order by variable
     literal = 0  # Splitting literal (integer) (0 indicates no literal and must have empty head)
@@ -359,9 +361,9 @@ class LayerTerm:
     def tailMerge(self, other):
         ## Must have identical head and literal
         if self.head != other.head:
-            raise LayerTermException("Cannot merge tuples %s and %s.  Heads differ" % (str(self), str(other)))
+            raise SdpTermException("Cannot merge tuples %s and %s.  Heads differ" % (str(self), str(other)))
         if self.literal != other.literal:
-            raise LayerTermException("Cannot merge tuples %s and %s.  Literals differ" % (str(self), str(other)))
+            raise SdpTermException("Cannot merge tuples %s and %s.  Literals differ" % (str(self), str(other)))
         if self.tail == self.pbip.manager.leaf0:
             nroot, validation = self.tail, self.validation
         elif other.tail == self.pbip.manager.leaf0:
@@ -381,14 +383,14 @@ class LayerTerm:
             comment = "Tail merge.  Head = %s. Literal = %d" % (str(self.head), self.literal)
             antecedents = [self.validation, other.validation, jclause]
             validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
-        return LayerTerm(self.pbip, self.head, self.literal, nroot, validation)
+        return SdpTerm(self.pbip, self.head, self.literal, nroot, validation)
         
     # Combine two layer terms have matching heads and opposite literals of data variable
     def join(self, other):
         if self.literal != -other.literal:
-            raise LayerTermException("Cannot combine terms %s and %s.  Incompatible literals %d and %d" % (str(self), str(other), self.literal, other.literal))
+            raise SdpTermException("Cannot combine terms %s and %s.  Incompatible literals %d and %d" % (str(self), str(other), self.literal, other.literal))
         if self.head != other.head:
-            raise LayerTermException("Cannot combine terms %s and %s.  Non-matching heads" % (str(self), str(other)))
+            raise SdpTermException("Cannot combine terms %s and %s.  Non-matching heads" % (str(self), str(other)))
         nhead, nliteral = self.newHead(self.head)
         ivar = abs(self.literal)
         var = self.pbip.varMap[ivar]
@@ -411,7 +413,7 @@ class LayerTerm:
         hints["OPL"] = (evalidation,  resolver.cleanClause(list(nhead) + [ ivar, echild.id]))
         comment = "Join of terms %s and %s with root variable %d" % (str(self), str(other), ivar)
         validation = self.pbip.manager.vresolver.run(vclause, ivar, hints, comment)
-        return LayerTerm(self.pbip, nhead, nliteral, ntail, validation)
+        return SdpTerm(self.pbip, nhead, nliteral, ntail, validation)
 
     # Transfer literal from head to tail
     def processLiteral(self):
@@ -427,12 +429,12 @@ class LayerTerm:
         vclause = list(self.head) + [ntail.id]
         comment = "Transfer literal %d from head to tail for term %s" % (self.literal, str(self))
         validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
-        return LayerTerm(self.pbip, nhead, nliteral, ntail, validation)
+        return SdpTerm(self.pbip, nhead, nliteral, ntail, validation)
 
     # Combine head of one term with tail of other
     def resolve(self, other):
         if self.literal != -other.literal:
-            raise LayerTermException("Cannot resolve terms %s and %s.  Incompatible literals %d and %d" % (str(self), str(other), self.literal, other.literal))
+            raise SdpTermException("Cannot resolve terms %s and %s.  Incompatible literals %d and %d" % (str(self), str(other), self.literal, other.literal))
         rhead = resolver.cleanClause(list(self.head) + list(other.head))
         if rhead == resolver.tautologyId:
             return None
@@ -456,7 +458,7 @@ class LayerTerm:
             antecedents = [sid, oid, self.validation, other.validation]
         comment = "Resolve terms terms %s and %s" % (str(self), str(other))
         validation = self.pbip.manager.prover.createClause(vclause, antecedents, comment)
-        return LayerTerm(self.pbip, nhead, nliteral, ntail, validation)
+        return SdpTerm(self.pbip, nhead, nliteral, ntail, validation)
 
 class Pbip:
     verbLevel = 1
@@ -729,7 +731,7 @@ class Pbip:
         return (root, validation)
 
 
-    def placeInLayerBucket(self, buckets, lterm):
+    def placeInSdpBucket(self, buckets, lterm):
         var = abs(lterm.literal)
         level = self.idToLevel(var)
         if level not in buckets:
@@ -787,7 +789,7 @@ class Pbip:
                         nterm = headDict[head][0][0].join(headDict[head][1][0])
                     if self.verbLevel >= 4:
                         print("  Generated data term %s" % str(nterm))
-                    self.placeInLayerBucket(buckets, nterm)
+                    self.placeInSdpBucket(buckets, nterm)
                 else:
                     if len(headDict[head][0]) == 0:
                         continue
@@ -799,7 +801,7 @@ class Pbip:
                             continue
                         if self.verbLevel >= 4:
                             print("  Generated resolution term %s" % str(nterm))
-                        self.placeInLayerBucket(buckets, nterm)                    
+                        self.placeInSdpBucket(buckets, nterm)                    
 
         # Process top-level bucket
         while len(bucketItems) > 1:
@@ -809,18 +811,18 @@ class Pbip:
             nterm = lt1.tailMerge(lt2)
             bucketItems.append(nterm)
         if len(bucketItems) < 1:
-            raise LayerTermException("Layered reduction failed.  Bucket 0 empty")
+            raise SdpTermException("Sdped reduction failed.  Bucket 0 empty")
         rt = bucketItems[0]
         return rt.tail, rt.validation
 
-    def performLayerReduction(self, hlist, inputIdSet):
+    def performSdpReduction(self, hlist, inputIdSet):
         # Set up buckets containing layer terms
         # Special bucket 0 for terms that depend only on external variables
         buckets = { 0 : []}
         for hid in hlist:
             iclause = self.creader.clauses[hid-1]
-            lterm = LayerTerm(self).fromInputClause(iclause, hid)
-            self.placeInLayerBucket(buckets, lterm)
+            lterm = SdpTerm(self).fromInputClause(iclause, hid)
+            self.placeInSdpBucket(buckets, lterm)
         (root, validation) = self.layerBucketReduce(buckets, inputIdSet)
         return (root, validation)
 
@@ -841,7 +843,7 @@ class Pbip:
         if self.verbLevel >= 2:
             self.prover.comment("Processing PBIP Input #%d.  Input clauses %s" % (pid, str(hlist)))
         if self.layerReduce:
-            (broot, bvalidation) = self.performLayerReduction(hlist, inputIdSet)
+            (broot, bvalidation) = self.performSdpReduction(hlist, inputIdSet)
         else:
             (broot, bvalidation) = self.performBucketReduction(hlist, inputIdSet)
 
