@@ -420,8 +420,8 @@ class Manager:
         return root, validation
     
     # Create BDD representation of disjunction of literals and add implication clause for root
-    def constructOr(self, integerLiterals, literalDict):
-        literalList = [literalDict[lit] for lit in integerLiterals]
+    def constructOr(self, integerLiterals, literalToBdd):
+        literalList = [literalToBdd(lit) for lit in integerLiterals]
         root = self.buildClause(literalList)
         litNodes = self.deconstructClauseBDD(root)
         # List antecedents in reverse order of resolution steps
@@ -454,8 +454,8 @@ class Manager:
         return litNodes
 
     # Create BDD representation of conjunction of literals and add implication clause for root
-    def constructAnd(self, integerLiterals, literalDict):
-        literalList = [literalDict[lit] for lit in integerLiterals]
+    def constructAnd(self, integerLiterals, literalToBdd):
+        literalList = [literalToBdd(lit) for lit in integerLiterals]
         root = self.buildConjunction(literalList)
         litNodes = self.deconstructConjunctionBDD(root)
         # List antecedents in reverse order of resolution steps
