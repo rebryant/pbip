@@ -703,7 +703,7 @@ class Pbip:
         varOrder = list(range(1, self.creader.nvar+1))
         if reorder:
             varOrder = self.creader.orderVariables(inputCount)
-        self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.creader.nvar+1, verbLevel = verbLevel)
+        self.manager = bdd.Manager(prover = self.prover, rootGenerator = self.rootGenerator, nextNodeId = self.creader.nvar+1, verbLevel = verbLevel)
         self.litMap = {}
         for id in varOrder:
             var = self.manager.newVariable(name = "V%d" % id, id = id)
@@ -775,6 +775,7 @@ class Pbip:
         self.tbddList.append((nroot,None))
         if nroot is not None:
             self.maxBddSize = max(self.maxBddSize, self.manager.getSize(nroot))
+        startCount = len(self.manager.uniqueTable)
         pid = len(self.constraintList)
         done = False
         for com in comlist:
@@ -790,6 +791,9 @@ class Pbip:
             done = len(tclause) == 0 if clauseOnly else nroot == self.manager.leaf0
         else:
             raise PbipException("", "Unexpected command '%s'" % command)
+        deltaCount = len(self.manager.uniqueTable) - startCount
+        if deltaCount > 0:
+            self.manager.checkGC(deltaCount)
         return done
         
     def needTbdd(self, pid):
@@ -1032,6 +1036,10 @@ class Pbip:
                 print("PBIP: Processed PBIP RUP addition #%d.  Added %d clauses" % (pid, self.deltaClauses()))
                 self.prover.comment("Processed PBIP RUP addition #%d.  Target clause %s #%d" % (pid, targetClause, cid))
             
+    def rootGenerator(self):
+        return [root for root,validation in self.tbddList if root is not None]
+            
+
     def run(self):
         while not self.doStep():
             pass
