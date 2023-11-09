@@ -653,6 +653,7 @@ struct Manager {
     int next_original_clause_id = 0;
     vector<int> original_id_to_new_id;
     vector<vector<pair<int, string>>> current_new_format_items;
+    int opt_id;
 
     ClauseManager() {
       next_original_clause_id = 0;
@@ -668,6 +669,7 @@ struct Manager {
       clauses.push_back(c);
       return this_clause;
     }
+
 
     int get_next_original_clause_id() {
       next_original_clause_id++;
@@ -686,6 +688,21 @@ struct Manager {
       get_next_original_clause_id();
       return this_clause;
     }
+
+
+    void register_opt(clause r) {
+      final_clause c;
+      c.clause_type = 'i';
+      c.c = r;
+      c.hints[0] = -1;
+      c.hints[1] = -1;
+      clauses.push_back(c);
+      opt_id = clauses.size() - 1;
+    }    
+    void add_opt() {
+      add_original_clause('a', clauses[opt_id].c, opt_id);
+    }
+
 
     void ignore_original_clauses(int k) {
       while (k >= 0) {
@@ -931,29 +948,6 @@ struct Manager {
     }
     return to_string(hint);
   }
-
-
-  // // LOG FILE FORMAT
-  // // ---------[file name]--------
-  // // #INPUT CLAUSES: [#input clauses]
-  // // #FINAL CLAUSES: [#output clauses]
-  // // #RUP STEPS: [#rup steps]
-  // // #MIN RUP TIME: [min rup time]
-  // // #MAX RUP TIME: [max rup time]
-  // // #AVG RUP TIME: [avg rup time]
-  // // #AVG PROPAGATIONS/RUP: [#avg rup props]
-  // // #MAX PROPAGATIONS/RUP: [#avg rup props]
-  // // #RPN STEPS: [#rpn steps]
-  // // #RPN SIMPLIFICATIONS: [#trie simplifications]
-  // void log_output(const string& filename="") {
-  //   if (!filename.empty()) {
-  //     ofstream file(filename);
-
-  //     if (file.is_open()) {
-  // 	//	file << 
-  //     }
-  //   }
-  // }
 
   void output(const string& filename="") {
     if (filename.empty()) {

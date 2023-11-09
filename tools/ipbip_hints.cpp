@@ -160,7 +160,7 @@ rpn_input str_to_rpn_input(string line) {
 }
 
 void loadFormula(string formula_file) {
-  cout << "c Loading PB formula from " << formula_file << endl;
+  //  cout << "c Loading PB formula from " << formula_file << endl;
   ifstream in_file (formula_file);
   if (in_file.fail()) {
     //    cout << "Formula file " << formula_file << " doesn't exist!" << endl;
@@ -222,8 +222,55 @@ int count_RUP(string proof_file) {
   return count;
 }
 
+vector<string> proof_lines;
+
+void loadProof(string proof_file) {
+  //  cout << "[ipbip_hints] loadProof" << endl;
+  ifstream in_file (proof_file);
+  string line;
+  while (getline(in_file, line)) {
+    proof_lines.push_back(line);
+  }
+  return;
+}
+
+void find_strongest_opt() {
+  //  cout << "[ipbip_hints] find_strongest_opt" << endl;
+  for (int i = proof_lines.size() - 1; i >= 0; i--) {
+    string line = proof_lines[i];
+    vector<string> toks = split(line, " ");
+    string command = toks[0];
+    if (command == "o") {
+      vector<string> assn = vector<string>(toks.begin() + 1, toks.end());
+
+      int found_size = 0;
+      list<term> l;
+      // vector<tuple<string, int> > term_list;
+      for (auto& a : assn) {
+	term t = vm.get_term(a);
+	t.neg = false;
+	  
+	l.push_back(t);
+
+	if (a[0] != '~') {
+	  found_size += 1;
+	}
+      }
+
+      int new_rhs = found_size + 1;
+	
+      input_clause c = input_clause(l, new_rhs);
+      clause strongest_opt = clause(c);
+      mngr.clauses.register_opt(strongest_opt);
+      break;
+    }
+  }
+  return;
+  
+}
+
 void parseProof(string proof_file) {
-  //  cout << "c Loading VeriPB proof from " << proof_file << endl;
+   cout << "c Loading VeriPB proof from " << proof_file << endl;
 
   int rup_count = count_RUP(proof_file);
   
@@ -240,7 +287,10 @@ void parseProof(string proof_file) {
 
   //  int id = 0; // CHANGE THIS
   //   int id = mngr.next_clause_id - 1;
-  while (getline(in_file, line)) {
+  //  while (getline(in_file, line)) {
+  for (int i = 0; i < proof_lines.size(); i++) {
+    string line = proof_lines[i];
+    //    cout << "c ipbip_hints: Loading " << line << endl;
     if (linenum == 1) {
       
       linenum += 1;
@@ -249,39 +299,21 @@ void parseProof(string proof_file) {
       linenum += 1;
       vector<string> toks = split(line, " ");
       string command = toks[0];
-
       if (command == "#" || command == "*") {
         continue;
       } else if (command == "f") {
-	//	cout << "c ipbip_hints: Loading " << line << endl;
         continue;
       } else if (command == "o") {
 	//	cout << "c ipbip_hints: Loading " << line << endl;
 	//        id += 1;
-        vector<string> assn = vector<string>(toks.begin() + 1, toks.end());
 
-        int found_size = 0;
-	list<term> l;
-        // vector<tuple<string, int> > term_list;
-        for (auto& a : assn) {
-	  term t = vm.get_term(a);
-	  t.neg = false;
-	  
-	  l.push_back(t);
-
-          if (a[0] != '~') {
-            found_size += 1;
-          }
-	}
-
-        int new_rhs = found_size + 1;
-	
-        input_clause c = input_clause(l, new_rhs);
 
 	//	cout << "c [parseProof] o constraint: loading " << clause(c).output_clause() << endl;
-        mngr.add_input(c);
+        // mngr.add_input(c);
+	mngr.clauses.add_opt();
+	
       } else if (command == "u") {
-	//	cout << "c ipbip_hints: [" << u_count << "/" << rup_count << "] Loading " << line << endl;
+	cout << "c ipbip_hints: [" << u_count << "/" << rup_count << "] Loading " << line << endl;
 	//        id += 1;
 
 	//        PBConstraint c = str_to_constraint(line.substr(2, line.length() - 2));
@@ -337,15 +369,10 @@ int main(int argc, char** argv) {
   bool recFormula = false;
   bool recProof = false;
   bool recOutput = false;
-
-  //  bool doLog = false;
     
   string formula_file;
   string proof_file;
   string ipbip_file;
-  //  string log_file;
-
-  cout << "c [ipbip_hints] Processing VeriPB file " << proof_file << endl;
 
   // Shut GetOpt error messages down (return '?'): 
   opterr = 0;
@@ -365,9 +392,6 @@ int main(int argc, char** argv) {
       recOutput = true;
       ipbip_file = optarg;
       break;
-    // case 'l':
-    //   doLog = true;
-    //   log_file = optarg;
     case '?':
       cerr << "Ill-formatted option: " << char(optopt) << endl;
       break;
@@ -398,22 +422,18 @@ int main(int argc, char** argv) {
     //    cout << "c [Setup]: .ipbip destination " << ipbip_file << endl;
   }
 
-  // if (doLog) {
-  //   cout << "c [Setup]: log location " << log_file << endl;
-  // }
-
   //  cout << "c ----- [FORMULA] -----" << endl;
   loadFormula(formula_file);
 
+  loadProof(proof_file);
+  find_strongest_opt();
+  cout << "[ipbip_hints] done loading" << endl;
   //  cout << "c ----- [VERIPB] -----" << endl;
   parseProof(proof_file);
 
   //  cout << "c ----- [IPBIP OUTPUT] -----" << endl;
-  cout << "c [ipbip_hints] Emitting IPBIP proof to " << ipbip_file << endl;
+  cout << "c Emitting IPBIP proof to " << ipbip_file << endl;
 
-  // if (doLog) {
-  //   mngr.log_output(log_file);
-  // }
   mngr.output(ipbip_file);
   //  cout << "c Done emitting IPBIP proof to " << ipbip_file << endl;
 
