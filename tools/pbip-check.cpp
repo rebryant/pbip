@@ -49,6 +49,72 @@ void usage(char *name) {
     printf("  -o FILE.lrat Output proof file\n");
 }
 
+// Weird TBDD operations required to support unit propagation
+
+// Set up unit propagation in RUP step
+// Have lit == 0 for final conflict
+static int tbdd_unit_propagate(tbdd tp, ilist context, int lit) {
+    report(4, "Propagating unit %d using TBDD N%d\n", lit, tbdd_nameid(tp));
+    ilist args = ilist_copy(context);
+    for (int i = 0; i < ilist_length(args); i++)
+	args[i] = -args[i];
+    if (lit != 0)
+	args = ilist_push(args, lit);
+    bdd r = bdd_build_clause(args);
+    tbdd t = tbdd_validate(r, tp);
+    bdd node = r;
+    ilist hlist = ilist_new(0);
+    if (t.get_clause_id() != TAUTOLOGY)
+	hlist = ilist_push(hlist, t.get_clause_id());
+    while (node != bdd_false()) {
+	bool positive = bdd_high(node) == bdd_true();
+	int nid = node.dclause(positive ? DEF_LD : DEF_HD);
+	hlist = ilist_push(hlist, nid);
+	node = positive ? bdd_low(node) : bdd_high(node);
+    }
+    if (lit == 0)
+	print_proof_comment(2, "Justify RUP conflict using TBDD N%d", tbdd_nameid(tp));
+    else
+	print_proof_comment(2, "Justify unit propagation of literal %d using TBDD N%d", lit, tbdd_nameid(tp));
+    int prop_id = generate_clause(args, hlist);
+    ilist_free(args);
+    ilist_free(hlist);
+    return prop_id;
+}
+
+// Set up unit propagation in RUP step
+// Have lit == 0 for final conflict
+static int target_unit_propagate(bdd rt, ilist context, int lit) {
+    report(4, "Propagating unit %d using target N%d\n", lit, rt.nameid());
+    ilist args = ilist_copy(context);
+    if (lit != 0)
+	args = ilist_push(args, -lit);
+    bdd r = bdd_build_cube(args);
+    for (int i = 0; i < ilist_length(args); i++)
+	args[i] = -args[i];
+    args = ilist_push(args, rt.xvar());
+    int imp_id = bdd_prove_implication(r, rt);
+    ilist hlist = ilist_new(0);
+    if (imp_id != TAUTOLOGY)
+	hlist = ilist_push(hlist, imp_id);
+    bdd node = r;
+    while (node != bdd_true()) {
+	bool positive = bdd_low(node) == bdd_false();
+	int nid = node.dclause(positive ? DEF_HU : DEF_LU);
+	hlist = ilist_push(hlist, nid);
+	node = positive ? bdd_high(node) : bdd_low(node);
+    }
+    if (lit == 0)
+	print_proof_comment(2, "Justify RUP conflict with RUP target");
+    else
+	print_proof_comment(2, "Justify unit propagation of literal %d with RUP target", lit);
+    int prop_id = generate_clause(args, hlist);
+    ilist_free(args);
+    ilist_free(hlist);
+    return prop_id;
+}
+
+
 class pbip_line {
 private:
     int line_id;
@@ -167,9 +233,15 @@ private:
     cnf_tbdd *ct;
     bool only_bdd;
     bool use_sdp;
-
+    int last_clause_count;
 
 public:
+    int added_clauses() {
+	int lcc = last_clause_count;
+	last_clause_count = total_clause_count;
+	return last_clause_count - lcc;
+    }
+
     pbip_proof(CNF *cnf, FILE *pbip, FILE *lrat, ilist variable_ordering, bool bdd, bool sdp)  {
 	pbip_file = pbip;
 	int clause_count = cnf->clause_count();
@@ -191,6 +263,7 @@ public:
 	report(3, "\n");
 
 	line_count = 0;
+	last_clause_count = total_clause_count;
 	rewind(pbip_file);
 	ct = new cnf_tbdd(data_variables, use_sdp);
     }
@@ -217,7 +290,7 @@ public:
 		}
 	    } else {
 		pbip_line *line = new pbip_line(lines.size() + 1, pb);
-		if (verblevel >= 3) {
+		if (verblevel >= 4) {
 		    report(3, "c Read PBIP line: ");
 		    pb->show(stdout);
 		    report(3, "\n");
@@ -247,7 +320,6 @@ public:
 
 private:
     void do_input(pbip_line *line) {
-	report(2, "c Processing Input %d\n", line->get_id());
 	ilist clause_list = ilist_new(0);
 	int id;
 	while (find_int(pbip_file, &id)) {
@@ -256,17 +328,18 @@ private:
 	tbdd t = ct->extract_tbdd(clause_list);
 	line->validate_tbdd(t);
 	ilist_free(clause_list);
+	report(2, "c Processed Input %d.  %d added clauses\n", line->get_id(), added_clauses());
     }
 
     void do_rup(pbip_line *line) {
-	report(2, "c Processing RUP %d\n", line->get_id());
-	ilist id_list = ilist_new(0);
-	ilist literal_list = ilist_new(0);
-	report(3, "c Processing RUP command.  Hints: ");
+	ilist unit_literals = ilist_new(0);
+	ilist rup_hint = ilist_new(0);
+	bdd rtarget = line->get_constraint()->generate_bdd();
+	bool conflict_generated = true;
 	while (true) {
 	    bool done = false;
-	    int id;
-	    int lit;
+	    int id = 0;
+	    int lit = 0;
 	    switch (find_character(pbip_file, '[')) {
 	    case PARSE_EOF:
 	    case PARSE_EOL:
@@ -278,38 +351,57 @@ private:
 	    case PARSE_OK:
 		break;
 	    }
-	    if (done)
+	    if (done) {
+		if (!conflict_generated) {
+		    err(true, "Line %d.  Complete RUP hints without final conflict\n", line_count+1);
+		}
 		break;
+	    }
 	    if (find_int(pbip_file, &id) != PARSE_OK) 
 		err(true, "Line %d.  Expecting integer ID in RUP hint\n", line_count+1);
 	    if (id < 0)
 		id = -id;
-	    bool found_plit = find_literal(pbip_file, &lit) == PARSE_OK;
+	    if (id == 0 || id > line->get_id())
+		err(true, "Line %d.  Invalid clause ID %d in RUP hint\n", line_count+1, id);
+	    if (find_literal(pbip_file, &lit) != PARSE_OK)
+		lit = 0;
 	    if (find_character(pbip_file, ']') != PARSE_OK)
 		err(true, "Line %d.  Expecting ']' in RUP hint\n", line_count+1);
-	    id_list = ilist_push(id_list, id);
-	    if (found_plit) {
-		report(3, " [%d %d]", id, lit);
-		literal_list = ilist_push(literal_list, lit);
-	    } else {
-		report(3, " [%d]]", id);
+	    int prop_id = 0;
+	    if (id == line->get_id())
+		prop_id = target_unit_propagate(rtarget, unit_literals, lit);
+	    else {
+		pbip_line *pline = lines[id-1];
+		prop_id = tbdd_unit_propagate(pline->get_constraint()->get_validation(), unit_literals, lit);
 	    }
+	    if (prop_id != TAUTOLOGY)
+		rup_hint = ilist_push(rup_hint, prop_id);
+	    if (lit == 0)
+		conflict_generated = true;
+	    else
+		unit_literals = ilist_push(unit_literals, lit);
+	    
 	}
-	report(3, "\n");
-	ilist_free(id_list);
-	ilist_free(literal_list);
+	print_proof_comment(2, "RUP validation of target N%d", rtarget.nameid());
+	ilist_resize(unit_literals, 1);
+	unit_literals[0] = rtarget.xvar();
+	int vid = generate_clause(unit_literals, rup_hint);
+	tbdd target(rtarget, vid);
+	line->get_constraint()->add_validation(target);
+	ilist_free(unit_literals);
+	ilist_free(rup_hint);
+	report(2, "c Processing RUP %d.  %d added clauses\n", line->get_id(), added_clauses());
     }
 
     void do_assertion(pbip_line *line) {
-	report(2, "c Processing Assertion %d\n", line->get_id());
 	ilist hint_ids = ilist_new(0);
 	int id;
-	report(3, "   Hints:");
+	report(4, "   Hints:");
 	while (find_int(pbip_file, &id)) {
 	    hint_ids = ilist_push(hint_ids, id);
-	    report(3, " %d", id);
+	    report(4, " %d", id);
 	}
-	report(3, "\n");
+	report(4, "\n");
 	if (ilist_length(hint_ids) < 1)
 	    err(true, "Line %d.  Expecting hint(s)\n", line_count+1);
 	if (ilist_length(hint_ids) > 2)
@@ -333,6 +425,7 @@ private:
 	    line->validate_tbdd_with_and(t1, t2);
 	}
 	ilist_free(hint_ids);
+	report(2, "c Processing Assertion %d.  %d added clauses\n", line->get_id(), added_clauses());
     }
 };
 
@@ -404,8 +497,9 @@ int main(int argc, char *argv[]) {
     ilist_resize(variable_ordering, cnf->max_variable());
     for (int i = 0; i < cnf->max_variable(); i++)
 	variable_ordering[i] = i+1;
-
+    double start = tod();
     pbip_proof p(cnf, pbip_file, lrat_file, variable_ordering, only_bdd, use_sdp);
     p.run(false);
+    report(1, "\nc Elapsed time for proof generation = %.2f seconds\n", tod() - start);
     return 0;
 }
