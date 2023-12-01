@@ -72,11 +72,16 @@ static int tbdd_unit_propagate(tbdd tp, ilist context, int lit) {
 	hlist = ilist_push(hlist, nid);
 	node = positive ? bdd_low(node) : bdd_high(node);
     }
-    if (lit == 0)
-	print_proof_comment(2, "Justify RUP conflict using TBDD N%d", tbdd_nameid(tp));
-    else
-	print_proof_comment(2, "Justify unit propagation of literal %d using TBDD N%d", lit, tbdd_nameid(tp));
-    int prop_id = generate_clause(args, hlist);
+    int prop_id = 0;
+    if (ilist_length(hlist) == 1)
+	prop_id = hlist[0];
+    else {
+	if (lit == 0)
+	    print_proof_comment(2, "Justify RUP conflict using TBDD N%d", tbdd_nameid(tp));
+	else
+	    print_proof_comment(2, "Justify unit propagation of literal %d using TBDD N%d", lit, tbdd_nameid(tp));
+	prop_id = generate_clause(args, hlist);
+    }
     ilist_free(args);
     ilist_free(hlist);
     return prop_id;
@@ -104,11 +109,16 @@ static int target_unit_propagate(bdd rt, ilist context, int lit) {
 	hlist = ilist_push(hlist, nid);
 	node = positive ? bdd_high(node) : bdd_low(node);
     }
-    if (lit == 0)
-	print_proof_comment(2, "Justify RUP conflict with RUP target");
-    else
-	print_proof_comment(2, "Justify unit propagation of literal %d with RUP target", lit);
-    int prop_id = generate_clause(args, hlist);
+    int prop_id = 0;
+    if (ilist_length(hlist) == 1)
+	prop_id = hlist[0];
+    else {
+	if (lit == 0)
+	    print_proof_comment(2, "Justify RUP conflict with RUP target");
+	else
+	    print_proof_comment(2, "Justify unit propagation of literal %d with RUP target", lit);
+	prop_id = generate_clause(args, hlist);
+    }
     ilist_free(args);
     ilist_free(hlist);
     return prop_id;
