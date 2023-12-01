@@ -39,11 +39,12 @@
 using namespace trustbdd;
 
 void usage(char *name) {
-    printf("Usage: %s: [-h] [-b] [-S] [-v VERB] [-S] -i FILE.CNF -p FILE.pbip [-o FILE.lrat]\n", name);
+    printf("Usage: %s: [-h] [-b] [-S] [-R] [-v VERB] [-S] -i FILE.CNF -p FILE.pbip [-o FILE.lrat]\n", name);
     printf("  -h           Print this message\n");
     printf("  -v VERB      Set verbosity level\n");
     printf("  -b           Use BDDs for every step\n");
     printf("  -S           Disable SDP processing of CNF\n");
+    printf("  -R           Disable variable ordering\n");
     printf("  -i FILE.cnf  Input CNF file\n");
     printf("  -p FILE.pbip PBIP Proof file\n");
     printf("  -o FILE.lrat Output proof file\n");
@@ -273,7 +274,7 @@ public:
 	return last_clause_count - lcc;
     }
 
-    pbip_proof(CNF *cnf, FILE *pbip, FILE *lrat, ilist variable_ordering, bool bdd, bool sdp)  {
+    pbip_proof(CNF *cnf, FILE *pbip, FILE *lrat, bool bdd, bool sdp, bool reorder)  {
 	pbip_file = pbip;
 	only_bdd = bdd;
 	use_sdp = sdp;
@@ -284,9 +285,6 @@ public:
 	    Clause *cp = (*cnf)[i];
 	    clauses[i] = cp->data();
 	}
-	int rcode;
-	if ((rcode = tbdd_init_lrat(lrat, cnf->max_variable(), clause_count, clauses, variable_ordering)) != 0)
-	    err(true, "Initialization failed.  Return code = %d\n", rcode);
 	data_variables = new std::unordered_set<int>;
 	// Run through proof file to identify data variables
 	run(true);
@@ -296,10 +294,27 @@ public:
 	    report(3, " %d", v);
 	report(3, "\n");
 
+	ct = new cnf_tbdd(data_variables, use_sdp);
+
+	ilist variable_ordering;
+	if (reorder)
+	    variable_ordering = ct->order_variables(cnf);
+	else {
+	    variable_ordering = ilist_new(cnf->max_variable());
+	    ilist_resize(variable_ordering, cnf->max_variable());
+	    for (int i = 0; i < cnf->max_variable(); i++)
+		variable_ordering[i] = i+1;
+	}
+
 	line_count = 0;
 	last_clause_count = total_clause_count;
 	rewind(pbip_file);
-	ct = new cnf_tbdd(data_variables, use_sdp);
+
+	int rcode;
+	if ((rcode = tbdd_init_lrat(lrat, cnf->max_variable(), clause_count, clauses, variable_ordering)) != 0)
+	    err(true, "Initialization failed.  Return code = %d\n", rcode);
+
+
     }
 
     void run(bool data_only) {
@@ -322,6 +337,7 @@ public:
 			lit = -lit;
 		    data_variables->insert(lit);
 		}
+		delete pb;
 	    } else {
 		pbip_line *line = new pbip_line(lines.size() + 1, pb);
 		if (verblevel >= 4) {
@@ -515,12 +531,12 @@ int main(int argc, char *argv[]) {
     FILE *cnf_file = NULL;
     FILE *pbip_file = NULL;
     FILE *lrat_file = NULL;
-    ilist variable_ordering = NULL;
     bool only_bdd = false;
     bool use_sdp = true;
+    bool reorder = true;
     int vlevel = 1;
     int c;
-    while ((c = getopt(argc, argv, "hbSv:i:p:o:")) != -1) {
+    while ((c = getopt(argc, argv, "hbSRv:i:p:o:")) != -1) {
 	switch (c) {
 	case 'h':
 	    usage(argv[0]);
@@ -530,6 +546,9 @@ int main(int argc, char *argv[]) {
 	    break;
 	case 'S':
 	    use_sdp = false;
+	    break;
+	case 'R':
+	    reorder = false;
 	    break;
 	case 'v':
 	    vlevel = atoi(optarg);
@@ -576,17 +595,12 @@ int main(int argc, char *argv[]) {
 	report(1, "c Read CNF file with %d variables and %d clauses\n", cnf->max_variable(), cnf->clause_count());
 
     report(1, "PBIP to LRAT conversion options:\n");
-    report(1, "  BDD Only: %s\n", only_bdd ? "true" : "false");
-    report(1, "  Symbolic DP: %s\n", use_sdp ? "true" : "false");
-
-    variable_ordering = ilist_new(cnf->max_variable());
-    ilist_resize(variable_ordering, cnf->max_variable());
-    for (int i = 0; i < cnf->max_variable(); i++)
-	variable_ordering[i] = i+1;
-
+    report(1, "  BDD Only:          %s\n", only_bdd ? "true" : "false");
+    report(1, "  Symbolic DP:       %s\n", use_sdp ? "true" : "false");
+    report(1, "  Reorder variables: %s\n", reorder ? "true" : "false");
 
     double start = tod();
-    pbip_proof p(cnf, pbip_file, lrat_file, variable_ordering, only_bdd, use_sdp);
+    pbip_proof p(cnf, pbip_file, lrat_file, only_bdd, use_sdp, reorder);
     p.run(false);
     report(1, "\nc Elapsed time for proof generation = %.2f seconds\n", tod() - start);
     return 0;
