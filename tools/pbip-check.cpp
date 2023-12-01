@@ -126,7 +126,7 @@ public:
     pbip_line(int id, pb_constraint *con) {
 	line_id = id;
 	tbdd trep = tbdd_null();
-	clause_id = -1;
+	clause_id = 0;
 	clause_literals = NULL;
 	constraint = con;
     }
@@ -138,8 +138,29 @@ public:
     void validate_tbdd_with_and(tbdd t1, tbdd t2) {
 	constraint->validate_with_and(t1, t2);
     }
+
+    void add_clause(int id, ilist literals) {
+	clause_id = id;
+	clause_literals = ilist_copy(literals);
+    }
+
+    tbdd get_tbdd_validation() {
+	if (constraint->is_validated())
+	    return constraint->get_validation();
+	if (clause_id > 0) {
+	    tbdd t = tbdd_from_clause_with_id(clause_literals, clause_id);
+	    constraint->add_validation(t);
+	    return t;
+	}
+	err(true, "Have no way to validate PBIP line %d\n", line_id);
+	return tbdd_null();
+    }
+
     pb_constraint* get_constraint() { return constraint; }
+
     int get_id() { return line_id; }
+    int get_clause_id() { return clause_id; }
+
 };
 
 
@@ -244,6 +265,9 @@ public:
 
     pbip_proof(CNF *cnf, FILE *pbip, FILE *lrat, ilist variable_ordering, bool bdd, bool sdp)  {
 	pbip_file = pbip;
+	only_bdd = bdd;
+	use_sdp = sdp;
+
 	int clause_count = cnf->clause_count();
 	ilist *clauses = new ilist[clause_count];
 	for (int i = 0; i < clause_count; i++) {
@@ -325,8 +349,13 @@ private:
 	while (find_int(pbip_file, &id)) {
 	    clause_list = ilist_push(clause_list, id);
 	}
-	tbdd t = ct->extract_tbdd(clause_list);
-	line->validate_tbdd(t);
+	if (only_bdd || ilist_length(clause_list) > 1) {
+	    tbdd t = ct->extract_tbdd(clause_list);
+	    line->validate_tbdd(t);
+	} else {
+	    int id = clause_list[0];
+	    line->add_clause(id, get_input_clause(id));
+	}
 	ilist_free(clause_list);
 	report(2, "c Processed Input %d.  %d added clauses\n", line->get_id(), added_clauses());
     }
@@ -334,8 +363,19 @@ private:
     void do_rup(pbip_line *line) {
 	ilist unit_literals = ilist_new(0);
 	ilist rup_hint = ilist_new(0);
-	bdd rtarget = line->get_constraint()->generate_bdd();
-	bool conflict_generated = true;
+	ilist try_clause = only_bdd ? NULL : line->get_constraint()->try_clause();
+	bool bdd_target = try_clause == NULL;
+	ilist target_clause;
+	bdd rtarget = bdd_false();
+	if (bdd_target) {
+	    rtarget = line->get_constraint()->generate_bdd();
+	    target_clause = ilist_new(0);
+	    if (rtarget != bdd_false())
+		target_clause = ilist_push(target_clause, rtarget.xvar());
+	} else {
+	    target_clause = ilist_copy(try_clause);
+	}
+	bool conflict_generated = false;
 	while (true) {
 	    bool done = false;
 	    int id = 0;
@@ -368,11 +408,17 @@ private:
 	    if (find_character(pbip_file, ']') != PARSE_OK)
 		err(true, "Line %d.  Expecting ']' in RUP hint\n", line_count+1);
 	    int prop_id = 0;
-	    if (id == line->get_id())
-		prop_id = target_unit_propagate(rtarget, unit_literals, lit);
-	    else {
+	    if (id == line->get_id()) {
+		if (bdd_target)
+		    prop_id = target_unit_propagate(rtarget, unit_literals, lit);
+		else
+		    prop_id = TAUTOLOGY;
+	    } else {
 		pbip_line *pline = lines[id-1];
-		prop_id = tbdd_unit_propagate(pline->get_constraint()->get_validation(), unit_literals, lit);
+		if (!only_bdd)
+		    prop_id = pline->get_clause_id();
+		if (prop_id == 0)
+		    prop_id = tbdd_unit_propagate(pline->get_tbdd_validation(), unit_literals, lit);
 	    }
 	    if (prop_id != TAUTOLOGY)
 		rup_hint = ilist_push(rup_hint, prop_id);
@@ -382,15 +428,32 @@ private:
 		unit_literals = ilist_push(unit_literals, lit);
 	    
 	}
-	print_proof_comment(2, "RUP validation of target N%d", rtarget.nameid());
-	ilist_resize(unit_literals, 1);
-	unit_literals[0] = rtarget.xvar();
-	int vid = generate_clause(unit_literals, rup_hint);
-	tbdd target(rtarget, vid);
-	line->get_constraint()->add_validation(target);
+	if (bdd_target)
+	    print_proof_comment(2, "RUP step #%d.  Validation of target N%d", line->get_id(), rtarget.nameid());
+	else
+	    print_proof_comment(2, "RUP step #%d.  Validation of target clause", line->get_id());
+	int vid = generate_clause(target_clause, rup_hint);
+	if (bdd_target) {
+	    tbdd target(rtarget, vid);
+	    pb_constraint *gen_con = line->get_constraint();
+	    gen_con->add_validation(target);
+	    if (try_clause != NULL) {
+		if (verblevel >= 4) {
+		    printf("Creating clausal representation of RUP target: [");
+		    ilist_print(try_clause, stdout, " ");
+		    printf("]\n");
+		}
+		int cid = gen_con->validate_clause(try_clause);
+		line->add_clause(cid, try_clause);
+	    }
+	} else {
+	    line->add_clause(vid, target_clause);
+	}
+
 	ilist_free(unit_literals);
 	ilist_free(rup_hint);
-	report(2, "c Processing RUP %d.  %d added clauses\n", line->get_id(), added_clauses());
+	ilist_free(target_clause);
+	report(2, "c Processed RUP %d.  %d added clauses\n", line->get_id(), added_clauses());
     }
 
     void do_assertion(pbip_line *line) {
@@ -411,8 +474,7 @@ private:
 	if (h1 < 1 || h1 >= line->get_id())
 	    err(true, "Line %d.  Invalid hint id %d\n", line_count+1, h1);
 	pbip_line *line1 = lines[h1-1];
-	pb_constraint *con1 = line1->get_constraint();
-	tbdd t1 = con1->get_validation();
+	tbdd t1 = line1->get_tbdd_validation();
 	if (ilist_length(hint_ids) == 1)
 	    line->validate_tbdd(t1);
 	else {
@@ -420,12 +482,22 @@ private:
 	    if (h2 < 1 || h2 >= line->get_id())
 		err(true, "Line %d.  Invalid hint id %d\n", line_count+1, h2);
 	    pbip_line *line2 = lines[h2-1];
-	    pb_constraint *con2 = line2->get_constraint();
-	    tbdd t2 = con2->get_validation();
+	    tbdd t2 = line2->get_tbdd_validation();
 	    line->validate_tbdd_with_and(t1, t2);
 	}
+	pb_constraint *gen_con = line->get_constraint();
+	ilist gen_clause = only_bdd ? NULL : gen_con->try_clause();
+	if (gen_clause != NULL) {
+	    if (verblevel >= 4) {
+		printf("Creating clausal representation of assertion: [");
+		ilist_print(gen_clause, stdout, " ");
+		printf("]\n");
+	    }
+	    int cid = gen_con->validate_clause(gen_clause);
+	    line->add_clause(cid, gen_clause);
+	}
 	ilist_free(hint_ids);
-	report(2, "c Processing Assertion %d.  %d added clauses\n", line->get_id(), added_clauses());
+	report(2, "c Processed Assertion %d.  %d added clauses\n", line->get_id(), added_clauses());
     }
 };
 
@@ -493,10 +565,16 @@ int main(int argc, char *argv[]) {
     else
 	report(1, "c Read CNF file with %d variables and %d clauses\n", cnf->max_variable(), cnf->clause_count());
 
+    report(1, "PBIP to LRAT conversion options:\n");
+    report(1, "  BDD Only: %s\n", only_bdd ? "true" : "false");
+    report(1, "  Symbolic DP: %s\n", use_sdp ? "true" : "false");
+
     variable_ordering = ilist_new(cnf->max_variable());
     ilist_resize(variable_ordering, cnf->max_variable());
     for (int i = 0; i < cnf->max_variable(); i++)
 	variable_ordering[i] = i+1;
+
+
     double start = tod();
     pbip_proof p(cnf, pbip_file, lrat_file, variable_ordering, only_bdd, use_sdp);
     p.run(false);
