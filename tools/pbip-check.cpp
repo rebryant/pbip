@@ -294,7 +294,7 @@ public:
 	    report(3, " %d", v);
 	report(3, "\n");
 
-	ct = new cnf_tbdd(data_variables, use_sdp);
+	ct = new cnf_tbdd(data_variables, cnf->max_variable(), use_sdp);
 
 	ilist variable_ordering;
 	if (reorder)
@@ -375,6 +375,7 @@ private:
 	while (find_int(pbip_file, &id)) {
 	    clause_list = ilist_push(clause_list, id);
 	}
+	print_proof_comment(2, "Processing Input #%d.  %d clauses", line->get_id(), ilist_length(clause_list));
 	if (only_bdd || ilist_length(clause_list) > 1) {
 	    tbdd t = ct->extract_tbdd(clause_list);
 	    line->validate_tbdd(t);
@@ -387,6 +388,7 @@ private:
     }
 
     void do_rup(pbip_line *line) {
+	print_proof_comment(2, "Processing RUP #%d", line->get_id());
 	ilist unit_literals = ilist_new(0);
 	ilist rup_hint = ilist_new(0);
 	ilist try_clause = only_bdd ? NULL : line->get_constraint()->try_clause();
@@ -483,6 +485,7 @@ private:
     }
 
     void do_assertion(pbip_line *line) {
+	print_proof_comment(2, "Processing Assertion #%d", line->get_id());
 	ilist hint_ids = ilist_new(0);
 	int id;
 	report(4, "   Hints:");
