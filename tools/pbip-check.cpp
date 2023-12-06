@@ -298,7 +298,7 @@ public:
 
 	ilist variable_ordering;
 	if (reorder)
-	    variable_ordering = ct->order_variables(cnf);
+	    variable_ordering = ct->order_variables(cnf, verblevel >= 3);
 	else {
 	    variable_ordering = ilist_new(cnf->max_variable());
 	    ilist_resize(variable_ordering, cnf->max_variable());
