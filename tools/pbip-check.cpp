@@ -320,6 +320,7 @@ public:
     void run(bool data_only) {
 	int lit;
 	int cmd;
+	report(2, "c Initial. %d clauses\n", added_clauses());
 	while ((cmd = next_cmd(pbip_file)) != EOF) {
 	    pb_constraint *pb = new pb_constraint(pbip_file);
 	    if (pb->get_relation() == PB_NONE) {
