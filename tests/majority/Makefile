@@ -1,8 +1,5 @@
 INTERP = python3
-GDIR=~/repos/pkc/benchmarks/generators
-MGEN=$(GDIR)/gen_threshold.py
 PBIPDIR = ../../tools
-CNFGEN = $(PBIPDIR)/pbip_cnf.py
 PROOFGEN = $(PBIPDIR)/pbip-check
 PPROOFGEN = $(PBIPDIR)/pbip_check.py
 LRATDIR = ~/repos/drat-trim
@@ -12,25 +9,38 @@ CGEN = ./gen_cmaj.py
 VLEVEL=2
 N=5
 
-majp: majp-$(N).pbip
+cmaj-sc: cmaj-sc-$(N).pbip
 
-majt: majt-$(N).pbip
+cmaj-sn: cmaj-sn-$(N).pbip
 
-cmaj: cmaj-$(N).ipbip
+cmaj-cn: cmaj-cn-$(N).pbip
 
-majp-$(N).pbip:
-	$(INTERP) $(MGEN) -v 2 -P -n $(N) -r majp-$(N)
+cmaj-tz: cmaj-tz-$(N).pbip
 
-majt-$(N).pbip:
-	$(INTERP) $(MGEN) -v 2 -P -n $(N) -t -r majt-$(N)
+cmaj-mt: cmaj-mt-$(N).pbip
 
-cmaj-$(N).ipbip:
-	$(INTERP) $(CGEN) $(N) > cmaj-$(N).ipbip
+cmaj-kt: cmaj-kt-$(N).pbip
 
-.SUFFIXES: .ipbip .pbip .lrat .ldata .plrat .pldata .blrat .bldata
+cmaj-sc-$(N).pbip:
+	$(INTERP) $(CGEN) -n $(N) -e seqcounter -p $@ -c $*.cnf 
 
-.ipbip.pbip:
-	$(INTERP) $(CNFGEN) -v $(VLEVEL) -i $< -o $@ -c $*.cnf | tee $*.cnfdata
+cmaj-sn-$(N).pbip:
+	$(INTERP) $(CGEN) -n $(N) -e sortnetwrk -p $@ -c $*.cnf 
+
+cmaj-cn-$(N).pbip:
+	$(INTERP) $(CGEN) -n $(N) -e cardnetwrk -p $@ -c $*.cnf 
+
+cmaj-tz-$(N).pbip:
+	$(INTERP) $(CGEN) -n $(N) -e totalizer -p $@ -c $*.cnf 
+
+cmaj-mt-$(N).pbip:
+	$(INTERP) $(CGEN) -n $(N) -e mtotalizer -p $@ -c $*.cnf 
+
+cmaj-kt-$(N).pbip:
+	$(INTERP) $(CGEN) -n $(N) -e kmtotalizer -p $@ -c $*.cnf 
+
+
+.SUFFIXES: .pbip .lrat .ldata .plrat .pldata .blrat .bldata
 
 .pbip.lrat:
 	$(PROOFGEN) -v $(VLEVEL) -i $*.cnf -p $< -o $@ | tee $*.checkdata
