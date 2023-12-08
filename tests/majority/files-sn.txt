@@ -1,0 +1,10 @@
+cmaj-sn-0011.cnf
+cmaj-sn-0021.cnf
+cmaj-sn-0031.cnf
+cmaj-sn-0041.cnf
+cmaj-sn-0051.cnf
+cmaj-sn-0061.cnf
+cmaj-sn-0071.cnf
+cmaj-sn-0081.cnf
+cmaj-sn-0091.cnf
+cmaj-sn-0101.cnf

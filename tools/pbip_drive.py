@@ -205,7 +205,7 @@ def runBatch(home, fileList, force):
 def run(name, args):
     global verbLevel, force, nameFile, modeFlag, exitWhenError
     home = "."
-    optList, args = getopt.getopt(args, "hfxv:m:t:")
+    optList, args = getopt.getopt(args, "hfxv:m:t:l:")
     for (opt, val) in optList:
         if opt == '-h':
             usage(name)
