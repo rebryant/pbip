@@ -320,7 +320,8 @@ public:
     void run(bool data_only) {
 	int lit;
 	int cmd;
-	report(2, "c Initial. %d clauses\n", added_clauses());
+	if (!data_only)
+	    report(2, "c Initial. %d clauses\n", added_clauses());
 	while ((cmd = next_cmd(pbip_file)) != EOF) {
 	    pb_constraint *pb = new pb_constraint(pbip_file);
 	    if (pb->get_relation() == PB_NONE) {
@@ -598,10 +599,10 @@ int main(int argc, char *argv[]) {
     else
 	report(1, "c Read CNF file with %d variables and %d clauses\n", cnf->max_variable(), cnf->clause_count());
 
-    report(1, "PBIP to LRAT conversion options:\n");
-    report(1, "  BDD Only:          %s\n", only_bdd ? "true" : "false");
-    report(1, "  Symbolic DP:       %s\n", use_sdp ? "true" : "false");
-    report(1, "  Reorder variables: %s\n", reorder ? "true" : "false");
+    report(1, "c PBIP to LRAT conversion options:\n");
+    report(1, "c  BDD Only:          %s\n", only_bdd ? "true" : "false");
+    report(1, "c  Symbolic DP:       %s\n", use_sdp ? "true" : "false");
+    report(1, "c  Reorder variables: %s\n", reorder ? "true" : "false");
 
     double start = tod();
     pbip_proof p(cnf, pbip_file, lrat_file, only_bdd, use_sdp, reorder);
