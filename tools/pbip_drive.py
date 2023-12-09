@@ -112,7 +112,6 @@ def runProgram(prefix, root, commandList, logFile):
         result += "%s OUTCOME: Timeout\n" % (prefix)
         logFile.write(result)
         logFile.close()
-        print("%s KILL: %s" % (prefix, killJobs(tempPrefix + root)))
         return False
     ok = True
     if cp.returncode != 0:
@@ -128,8 +127,6 @@ def runProgram(prefix, root, commandList, logFile):
     print("%s. %s: Elapsed time: %.3f seconds" % (root, prefix, seconds))
     logFile.write(cp.stdout)
     logFile.write(result)
-    if not ok:
-        print("%s KILL: %s" % (prefix, killJobs(tempPrefix + root)))        
     return ok
 
 def genLogName(root, home):
@@ -144,9 +141,6 @@ def runPbip(root, home):
     pbipName = home + "/" + root + ".pbip"
     lratName = home + "/" + root + ".lrat"
     logName = genLogName(root, home)
-    if not force and os.path.exists(logName):
-        print("Already have file '%s'.  Skipping" % logName)
-        return True
     cmd = [genProgram]
     cmd += ["-v", str(verbLevel)]
     if modeFlag == 'b':
@@ -195,6 +189,10 @@ def runBatch(home, fileList, force):
     roots = [r for r in roots if r is not None]
     print("Running on roots %s" % roots)
     for r in roots:
+        logName = genLogName(r, home)
+        if not force and os.path.exists(logName):
+            print("Already have file '%s'.  Skipping" % logName)
+            continue
         if not runPbip(r, home) and exitWhenError:
             print("PBIP Error encountered.  Exiting")
             break
