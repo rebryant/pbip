@@ -101,7 +101,7 @@ static int target_unit_propagate(bdd rt, ilist context, int lit) {
     args = ilist_push(args, rt.xvar());
     int imp_id = bdd_prove_implication(r, rt);
     ilist hlist = ilist_new(0);
-    if (imp_id != TAUTOLOGY)
+    if (imp_id != TAUTOLOGY) 
 	hlist = ilist_push(hlist, imp_id);
     bdd node = r;
     while (node != bdd_true()) {
@@ -120,6 +120,7 @@ static int target_unit_propagate(bdd rt, ilist context, int lit) {
 	    print_proof_comment(2, "Justify unit propagation of literal %d with RUP target", lit);
 	prop_id = generate_clause(args, hlist);
     }
+    process_deferred_deletions();
     ilist_free(args);
     ilist_free(hlist);
     return prop_id;
