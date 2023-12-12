@@ -1,5 +1,6 @@
 INTERP = python3
 PBIPDIR = ../../tools
+CNFGEN = $(PBIPDIR)/pbip_cnf.py
 PROOFGEN = $(PBIPDIR)/pbip-check
 PPROOFGEN = $(PBIPDIR)/pbip_check.py
 LRATDIR = ~/repos/drat-trim
@@ -8,6 +9,8 @@ CGEN = ./gen_cmaj.py
 
 VLEVEL=2
 N=5
+
+cmaj-ip: cmaj-ip-$(N).ipbip
 
 cmaj-sc: cmaj-sc-$(N).pbip
 
@@ -20,6 +23,9 @@ cmaj-tz: cmaj-tz-$(N).pbip
 cmaj-mt: cmaj-mt-$(N).pbip
 
 cmaj-kt: cmaj-kt-$(N).pbip
+
+cmaj-ip-$(N).ipbip:
+	$(INTERP) $(CGEN) -n $(N) -p $@ 
 
 cmaj-sc-$(N).pbip:
 	$(INTERP) $(CGEN) -n $(N) -e seqcounter -p $@ -c $*.cnf 
@@ -40,7 +46,10 @@ cmaj-kt-$(N).pbip:
 	$(INTERP) $(CGEN) -n $(N) -e kmtotalizer -p $@ -c $*.cnf 
 
 
-.SUFFIXES: .pbip .lrat .ldata .plrat .pldata .blrat .bldata
+.SUFFIXES: .ipbip .pbip .lrat .ldata .plrat .pldata .blrat .bldata
+
+.ipbip.pbip:
+	$(INTERP) $(CNFGEN) -v $(VLEVEL) -i $< -o $@ -c $*.cnf | tee $*.cnfdata
 
 .pbip.lrat:
 	$(PROOFGEN) -v $(VLEVEL) -i $*.cnf -p $< -o $@ | tee $*.checkdata

@@ -8,7 +8,7 @@ import getopt
 # Generate contradictory formula using majority constraint
 
 def usage(name):
-    print("Usage: %s [-h] -n NVAR [-m THRESH] [-e ENC] -p PFILE -c CFILE" % name)
+    print("Usage: %s [-h] -n NVAR [-m THRESH] [-e ENC] -p PFILE [-c CFILE]" % name)
     print("  -h        Print this message")
     print("  -n NVAR   Set number of variables")
     print("  -m THRESH Set threshold (default = n//2+1)")
@@ -30,51 +30,70 @@ encodings = {
 
 def gen_conflict(n, m, encoding, pbipFile, cnfFile):
     maxvar = n
-    clauses = []
+    clauseList1 = []
+    clauseList2 = []
+    clauseList = []
     vars = list(range(1,n+1))
-    cnf = card.CardEnc.atleast(vars, bound = m, top_id = maxvar+1, encoding = encoding)
-    clauses = cnf.clauses
-    startClause = 1
-    for clause in cnf.clauses:
-        for lit in clause:
-            var = abs(lit)
-        if var > maxvar:
-            maxvar = var
+    cnf = None
     pbipFile.write("* PBIP Declaration that %d inputs sum to value >= %d\n" % (n,m))
     pbipFile.write("i ")
     for i in vars:
         pbipFile.write("1 x%d " % i)
     pbipFile.write(">= %d ;" % m)
-    for h in range(startClause, len(clauses)+1):
-         pbipFile.write(" %d" % h)
+
+    if cnfFile is not None:
+        cnf = card.CardEnc.atleast(vars, bound = m, top_id = maxvar+1, encoding = encoding)
+        clauseList1 = cnf.clauses
+        startClause = 1
+        for clause in clauseList1:
+            for lit in clause:
+                var = abs(lit)
+                if var > maxvar:
+                    maxvar = var
+
+        for h in range(startClause, len(clauseList1)+1):
+            pbipFile.write(" %d" % h)
     pbipFile.write("\n")
          
-    startClause = len(clauses)+1
-    cnf = card.CardEnc.atmost(vars, bound = m-1, top_id = maxvar+1, encoding = encoding)
-    clauses = clauses + cnf.clauses
     pbipFile.write("* PBIP Declaration that %d inputs sum to value <= %d\n" % (n,m-1))
     pbipFile.write("i ")
     for i in range(1,n+1):
         pbipFile.write("1 x%d " % i)
     pbipFile.write("<=  %d ;" % (m-1))
-    for h in range(startClause, len(clauses)+1):
-        pbipFile.write(" %d " % h)
+
+    if cnfFile is not None:
+        startClause = len(clauseList1)+1
+        cnf = card.CardEnc.atmost(vars, bound = m-1, top_id = maxvar+1, encoding = encoding)
+        clauseList2 = cnf.clauses
+        clauseList = clauseList1 + clauseList2
+        for h in range(startClause, len(clauseList)+1):
+            pbipFile.write(" %d " % h)
     pbipFile.write("\n")
+
     pbipFile.write("* Prove conflict\n")
     pbipFile.write("a >= 1; 1 2\n")
-    for clause in cnf.clauses:
-        for lit in clause:
-            var = abs(lit)
-        if var > maxvar:
-            maxvar = var
-    cnfFile.write("c Conflicting constraints for n=%d, m= %d\n" % (m,n))
-    cnfFile.write("p cnf %d %d\n" % (maxvar, len(clauses)))
-    for clause in clauses:
-        ilits = [str(lit) for lit in clause]
-        cnfFile.write("%s 0\n" % " ".join(ilits))
     pbipFile.close()
-    cnfFile.close()
-    print("Wrote CNF file with %d variables and %d clauses" % (maxvar, len(clauses)))
+
+    if cnfFile is not None:
+        for clause in clauseList2:
+            for lit in clause:
+                var = abs(lit)
+                if var > maxvar:
+                    maxvar = var
+        cnfFile.write("c Conflicting constraints for n=%d, m=%d\n" % (m,n))
+        cnfFile.write("p cnf %d %d\n" % (maxvar, len(clauseList)))
+        cnfFile.write("c Cardinality >= %d\n" % m)
+        for clause in clauseList1:
+            ilits = [str(lit) for lit in clause]
+            cnfFile.write("%s 0\n" % " ".join(ilits))
+        cnfFile.write("c Cardinality <= %d\n" % (m-1))
+        for clause in clauseList2:
+            ilits = [str(lit) for lit in clause]
+            cnfFile.write("%s 0\n" % " ".join(ilits))
+        cnfFile.close()
+        print("Wrote CNF file with %d variables and %d clauses" % (maxvar, len(clauseList)))
+
+
 
 def run(name, argList):
     n = None
@@ -120,11 +139,13 @@ def run(name, argList):
     except:
         print("Couldn't open PBIP file '%s'" % pbipName)
         return
-    try:
-        cfile = open(cnfName, "w")
-    except:
-        print("Couldn't open CNF file '%s'" % cnfName)
-        return
+    cfile = None
+    if cnfName is not None:
+        try:
+            cfile = open(cnfName, "w")
+        except:
+            print("Couldn't open CNF file '%s'" % cnfName)
+            return
     gen_conflict(n, m, encoding, pfile, cfile)
            
                    
