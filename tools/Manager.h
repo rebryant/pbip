@@ -16,8 +16,10 @@
 #include <map>
 #include <set>
 #include <utility>
+#include <stack>
 #include <queue>
 
+#include <cstring>
 #include <stdio.h>
 #include <unordered_set>
 

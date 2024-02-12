@@ -24,6 +24,7 @@
 ========================================================================*/
 
 #include <ctype.h>
+#include <cassert>
 #include "Manager.h"
 #include "report.h"
 
@@ -274,11 +275,9 @@ void find_strongest_opt() {
   
 }
 
-void parseProof(string proof_file) {
+void parseProof(string proof_file, int rup_count) {
   // cout << "c Loading VeriPB proof from " << proof_file << endl;
 
-  int rup_count = count_RUP(proof_file);
-  
   ifstream in_file (proof_file);
   if (in_file.fail()) {
     //    cout << "Proof file " << proof_file << " doesn't exist!" << endl;
@@ -412,8 +411,9 @@ int main(int argc, char *argv[]) {
     loadProof(veripb_file);
     report(2, "c [ipbip_hints] Done loading formula + proof\n");
     find_strongest_opt();
+    int rup_count = count_RUP(veripb_file);
     double start = tod();
-    parseProof(veripb_file);
+    parseProof(veripb_file, rup_count);
     report(2, "c [ipbip_hints] Done hinting proof\n");
     // mngr.output(ipbip_file);
     // auto basename = split(ipbip_file, ".")[0];
@@ -421,8 +421,10 @@ int main(int argc, char *argv[]) {
     report(1, "\n\n");
     report(1, "c ipbip_hints statistics\n");
     report(1, "c -----------------------\n");
+    
     mngr.trimoutput(ipbip_file);
     int max_clique_size = mngr.clauses.clauses[mngr.clauses.opt_id].c.rhs - 1;
+    report(1, "c [ipbip_hints] RUP count: %d\n", rup_count);
     report(1, "c [ipbip_hints] Maximum clique size: %d\n", max_clique_size);
     report(1, "c [ipbip_hints] Elapsed time for proof hinting = %.2f seconds\n", tod() - start);
     report(2, "c [ipbip_hints] Done outputting .ipbip file\n");
