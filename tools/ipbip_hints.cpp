@@ -1,22 +1,60 @@
-//#include <bits/stdc++.h>
-
-//#include "ClauseManager.h"
-//#include "PBConstraint.h"
-
+/*========================================================================
+  Copyright (c) 2023 Randal E. Bryant, Marijn J. H. Heule,
+  Karthik Nukala, Soumyaditya Choudhuri, Carnegie Mellon University
+  
+  Permission is hereby granted, free of charge, to any person
+  obtaining a copy of this software and associated documentation files
+  (the "Software"), to deal in the Software without restriction,
+  including without limitation the rights to use, copy, modify, merge,
+  publish, distribute, sublicense, and/or sell copies of the Software,
+  and to permit persons to whom the Software is furnished to do so,
+  subject to the following conditions:
+  
+  The above copyright notice and this permission notice shall be
+  included in all copies or substantial portions of the Software.
+  
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+  BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+  ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+========================================================================*/
 
 #include <ctype.h>
 #include "Manager.h"
+#include "report.h"
+
 #define endl '\n'
-#define NEW_FORMAT true
+
+// Switches between parsing VeriPB 1.0 and VeriPB 2.0 proof formats
+// TODO: full support for 2.0
+#define VERIPB_VERSION 1
 
 vector<int> objective;
 int nvars;
 
 Manager mngr;
 
-// ClauseManager mngr = ClauseManager();
+void usage(char *name) {
+  printf("Usage: %s [-h] [-v VERB] [-f] FILE.opb [-p] FILE.veripb [-i] FILE.ipbip" , name);
+  printf("  -h              Print this message\n");
+  printf("  -v VERB         Set verbosity level\n");
+  printf("  -f FILE.opb     Input OPB file\n");
+  printf("  -p FILE.veripb  Input VeriPB file\n");
+  printf("  -i FILE.ipbip   IPBIP Proof file\n");
+}
 
+
+// Utilities for processing/parsing constraints ----------
+
+// (0-9)+
 bool digits_only(string st) {
+  if (st.length() == 0) {
+    return false;
+  }
   for (char& c : st) {
     if (!isdigit(c)) {
       return false;
@@ -25,7 +63,7 @@ bool digits_only(string st) {
   return true;
 }
 
-
+// Variables must be of the form (a-zA-Z)+(0-9)+
 bool isVar(string tok) {
   bool flag = false;
   for (int i = 0; i < tok.length(); i++) {
@@ -69,34 +107,6 @@ vector<string> split(string s, string delimiter) {
   res.push_back (s.substr (pos_start));
   return res;
 }
-
-
-// PBConstraint str_to_constraint(string line) {
-//   vector<tuple<string, int> > term_list;
-//   vector<string> toks = split(line, " ");
-//   for (int i = 0; i < toks.size(); i += 2) {
-//     vector<string> constraints{ ">=", "<=", ">", "<", "=" };
-//     if (std::find(constraints.begin(), constraints.end(), toks[i]) != constraints.end()) {
-//       string constraint_type = toks[i];
-//       int rhs_constant = stoi(toks[i + 1]);
-//       return PBConstraint(term_list, rhs_constant, constraint_type);
-//     }
-
-//     string str_ci = toks[i];
-//     string vi = toks[i + 1];
-
-//     int ci = stoi(str_ci);
-
-//     if (isVar(vi) || isVarNeg(vi)) {
-//       term_list.push_back(make_tuple(vi, ci));
-//     } else {
-//       cerr << "Expected variable, received " << vi << endl;
-//       exit(EXIT_FAILURE);
-//     }
-//   }
-
-//   assert(false); // shouldn't be able to get here!
-// }
 
 
 input_clause str_to_input_clause(string line) {
@@ -160,7 +170,7 @@ rpn_input str_to_rpn_input(string line) {
 }
 
 void loadFormula(string formula_file) {
-  //  cout << "c Loading PB formula from " << formula_file << endl;
+  // cout << "c Loading PB formula from " << formula_file << endl;
   ifstream in_file (formula_file);
   if (in_file.fail()) {
     //    cout << "Formula file " << formula_file << " doesn't exist!" << endl;
@@ -192,14 +202,9 @@ void loadFormula(string formula_file) {
     } else {
       clause_idx += 1;
       input_clause i = str_to_input_clause(line);
-      //     cout << "ADDING INPUT " << clause(i).output_clause() << endl;
       mngr.add_input(i);
-
-      //      cout << "c [loadFormula] Loaded constraint " << clause(i).output_clause() << endl;
     }
   }
-
-  //  cout << "c Done loading PB formula (" << clause_idx << " clauses) from " << formula_file << endl;
 }
 
 
@@ -240,7 +245,7 @@ void find_strongest_opt() {
     string line = proof_lines[i];
     vector<string> toks = split(line, " ");
     string command = toks[0];
-    if (command == "o") {
+    if (command == "o" || command == "soli") {
       vector<string> assn = vector<string>(toks.begin() + 1, toks.end());
 
       int found_size = 0;
@@ -270,7 +275,7 @@ void find_strongest_opt() {
 }
 
 void parseProof(string proof_file) {
-   cout << "c Loading VeriPB proof from " << proof_file << endl;
+  // cout << "c Loading VeriPB proof from " << proof_file << endl;
 
   int rup_count = count_RUP(proof_file);
   
@@ -290,7 +295,7 @@ void parseProof(string proof_file) {
   //  while (getline(in_file, line)) {
   for (int i = 0; i < proof_lines.size(); i++) {
     string line = proof_lines[i];
-    //    cout << "c ipbip_hints: Loading " << line << endl;
+    // cout << "c ipbip_hints: Loading " << line << endl;
     if (linenum == 1) {
       
       linenum += 1;
@@ -303,38 +308,24 @@ void parseProof(string proof_file) {
         continue;
       } else if (command == "f") {
         continue;
-      } else if (command == "o") {
-	//	cout << "c ipbip_hints: Loading " << line << endl;
-	//        id += 1;
-
-
-	//	cout << "c [parseProof] o constraint: loading " << clause(c).output_clause() << endl;
-        // mngr.add_input(c);
+      } else if (command == "o" || command == "soli") {
 	mngr.clauses.add_opt();
 	
       } else if (command == "u") {
-	cout << "c ipbip_hints: [" << u_count << "/" << rup_count << "] Loading " << line << endl;
-	//        id += 1;
-
-	//        PBConstraint c = str_to_constraint(line.substr(2, line.length() - 2));
+	if (u_count % 100 == 0) {
+    report(1, "c [ipbip_hints] elapsed: %d RUP steps, total: %d RUP steps\n", u_count, rup_count);
+    // cout << "c ipbip_hints: [" << u_count << "/" << rup_count << "] Loading " << line << endl;
+  }
 	input_clause c = str_to_input_clause(line.substr(2, line.length() - 2));
-
-
-	//	cout << "RUP CLAUSE: " << clause(c).output_clause() << endl;
-
-	mngr.add_derive(c, NEW_FORMAT);
+	mngr.add_derive(c, nvars);
 	u_count++;
         // mngr.derive(c, id);
       } else if (command == "w") {
         continue;
       } else if (command == "p") {
-	//	cout << "c ipbip_hints: Loading " << line << endl;
-	//        id += 1;
-
 	rpn_input r = str_to_rpn_input(line.substr(2, line.length() - 2));
 	mngr.add_rpn(r);
       } else if (command == "c") {
-	//	cout << "c ipbip_hints: Loading " << line << endl;
         break;
       }
     }
@@ -342,7 +333,7 @@ void parseProof(string proof_file) {
 
   // guard >= 1 assertion depending on whether it's already been seen
   input_clause final_unsat = str_to_input_clause(">= 1");
-  mngr.add_derive(final_unsat, NEW_FORMAT);
+  mngr.add_derive(final_unsat, nvars);
   u_count++;
 
   //  cout << "c Done hinting VeriPB proof from " << proof_file << endl;
@@ -354,88 +345,87 @@ void emit_usage_msg_ERR () {
   cerr << "USAGE: ./ipbip_hints -f [.opb input file] -p [.pbp/veripb input file] -i [.ipbip output file]" << endl;
 }
 
-/*
- * USAGE: ./ipbip_hints -f [.opb input file] -p [.pbp/veripb input file] -i [.ipbip output file]
- * - .opb is the initial formula
- * - .pbp/.veripb is the solver-generated proof (in the VeriPB proof format)
- * - .ipbip is the output format (intermediate step for PBIP translation)
- */
-int main(int argc, char** argv) {
-  ios_base::sync_with_stdio(false);
-  cin.tie(0);
-  cout.tie(0);
-  
-  int opt;
-  bool recFormula = false;
-  bool recProof = false;
-  bool recOutput = false;
-    
-  string formula_file;
-  string proof_file;
+bool uninit(string s) {
+  return s == "";
+}
+
+int main(int argc, char *argv[]) {
+  string opb_file;
+  string veripb_file;
   string ipbip_file;
 
-  // Shut GetOpt error messages down (return '?'): 
-  opterr = 0;
+  int vlevel = 1;
+  int c;
+  while ((c = getopt(argc, argv, "hv:f:p:i:")) != -1) {
+    switch (c) {
+    case 'h':
+      usage(argv[0]);
+      return 0;
 
-  // Retrieve the options:
-  while ( (opt = getopt(argc, argv, "f:p:i:")) != -1 ) {  // for each option...
-    switch ( opt ) {
+    case 'v':
+      vlevel = atoi(optarg);
+      break;
+
     case 'f':
-      recFormula = true;
-      formula_file = optarg;
+      opb_file = optarg;
+      report(2, "c [ipbip_hints] opb_file = %s\n", opb_file.c_str());
+      if (opb_file == "")
+	err(true, "Couldn't open .opb file %s\n", optarg);
       break;
     case 'p':
-      recProof = true;
-      proof_file = optarg;
+      veripb_file = optarg;
+      report(2, "c [ipbip_hints] veripb_file = %s\n", veripb_file.c_str());
+      if (veripb_file == "")
+	err(true, "Couldn't open .veripb file %s\n", optarg);
       break;
     case 'i':
-      recOutput = true;
       ipbip_file = optarg;
-      break;
-    case '?':
-      cerr << "Ill-formatted option: " << char(optopt) << endl;
+      report(2, "c [ipbip_hints] ipbip_file = %s\n", ipbip_file.c_str());
+      if (ipbip_file == "")
+	err(true, "Couldn't open .ipbip file %s\n", optarg);
       break;
     }
   }
 
-  if (!recFormula) {
-    cerr << "Missing input formula! [.opb input file]" << endl;
-    emit_usage_msg_ERR();
-    exit(EXIT_FAILURE);
-  } else {
-    //    cout << "c [Setup]: formula location " << formula_file << endl;
+  set_verblevel(vlevel);
+
+  if (uninit(opb_file)) {
+      report(0, "Require OPB file\n");
+      usage(argv[0]);
+      exit(1);
+  }
+  
+  if (uninit(veripb_file)) {
+      report(0, "Require VeriPB file\n");
+      usage(argv[0]);
+      exit(1);
   }
 
-  if (!recProof) {
-    cerr << "Missing VeriPB proof! [.pbp/.veripb input file]" << endl;
-    emit_usage_msg_ERR();
-    exit(EXIT_FAILURE);
-  } else {
-    //    cout << "c [Setup]: proof location " << proof_file << endl;
+  if (uninit(ipbip_file)) {
+      report(0, "Require IPBIP file\n");
+      usage(argv[0]);
+      exit(1);
   }
 
-  if (!recOutput) {
-    cerr << "Missing output destination! [.ipbip output file]" << endl;
-    emit_usage_msg_ERR();
-    exit(EXIT_FAILURE);
-  } else {
-    //    cout << "c [Setup]: .ipbip destination " << ipbip_file << endl;
-  }
+  
+    loadFormula(opb_file);
+    loadProof(veripb_file);
+    report(2, "c [ipbip_hints] Done loading formula + proof\n");
+    find_strongest_opt();
+    double start = tod();
+    parseProof(veripb_file);
+    report(2, "c [ipbip_hints] Done hinting proof\n");
+    // mngr.output(ipbip_file);
+    // auto basename = split(ipbip_file, ".")[0];
+    // string ipbip_trimmed = basename + "-trimmed.ipbip";
+    report(1, "\n\n");
+    report(1, "c ipbip_hints statistics\n");
+    report(1, "c -----------------------\n");
+    mngr.trimoutput(ipbip_file);
+    int max_clique_size = mngr.clauses.clauses[mngr.clauses.opt_id].c.rhs - 1;
+    report(1, "c [ipbip_hints] Maximum clique size: %d\n", max_clique_size);
+    report(1, "c [ipbip_hints] Elapsed time for proof hinting = %.2f seconds\n", tod() - start);
+    report(2, "c [ipbip_hints] Done outputting .ipbip file\n");
 
-  //  cout << "c ----- [FORMULA] -----" << endl;
-  loadFormula(formula_file);
-
-  loadProof(proof_file);
-  find_strongest_opt();
-  cout << "[ipbip_hints] done loading" << endl;
-  //  cout << "c ----- [VERIPB] -----" << endl;
-  parseProof(proof_file);
-
-  //  cout << "c ----- [IPBIP OUTPUT] -----" << endl;
-  cout << "c Emitting IPBIP proof to " << ipbip_file << endl;
-
-  mngr.output(ipbip_file);
-  //  cout << "c Done emitting IPBIP proof to " << ipbip_file << endl;
-
-  return 0;
+    return 0;
 }
