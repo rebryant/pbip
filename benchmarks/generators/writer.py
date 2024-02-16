@@ -138,12 +138,10 @@ def genExactlyOne(varList):
 # Creating PBIP (or OPB)
 class PbipWriter(Writer):
     opbOnly = False
-    commandCount = 0
     
     def __init__(self, fname, verbLevel = False, opbOnly = False):
         Writer.__init__(self, fname, verbLevel=verbLevel)
         self.opbOnly = opbOnly
-        self.commandCount = 0
 
     def doComment(self, line):
         self.show("* " + line)
@@ -162,3 +160,11 @@ class PbipWriter(Writer):
 
     def doAssert(self, opbstring, hints):
         self.doCommand('a', opbstring, hints)
+
+    def doSum(self, opbstring, hints):
+        self.doCommand('s', opbstring, hints)
+
+    def doConflict(self, hints):
+        opbstring = " >= 1"
+        self.doAssert(opbstring, hints)
+        

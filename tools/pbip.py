@@ -275,7 +275,7 @@ class PbipReader:
                 comlist.append(uncomment(line))
                 continue
             command = line[0]
-            if command not in "iauk":
+            if command not in "iauks":
                 raise PbipException("", "File %s Line %d: Invalid command '%s'" % (self.fname, self.lineCount, command))
             cline  = trim(line[1:])
             pos = cline.find(';')
@@ -287,7 +287,7 @@ class PbipReader:
                 clist = parseOpb(cstring)
             except PbipException as ex:
                 raise PbipException("", "File %s Line %d: %s" % (self.fname, self.lineCount, str(ex)))
-            if command in ['i', 'a']:
+            if command in ['i', 'a', 's']:
                 hfields = hstring.split()
                 try:
                     hlist = [int(f) for f in hfields]

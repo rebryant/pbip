@@ -8,12 +8,13 @@ import writer
 # Generate PBIP proof of PHP without CNF input
 
 def usage(name):
-    print("%s [-h] [-v VERB] [-e] -n N -o OUTFILE.{pbip,opb}" % name)
-    print("  -h          Print this message")
-    print("  -e          Use equations rather than ordering constraints")
-    print("  -v VERB     Set verbosity level")
-    print("  -n N        Set number of holes (pigeons = N+1)")
-    print("  -o OUT.pbip Set output file (PBIP or OPB format)")
+    print("%s [-h] [-v VERB] [-e] [-m p|s|c] -n N -o OUTFILE.{pbip,opb}" % name)
+    print("  -h           Print this message")
+    print("  -e           Use equations rather than ordering constraints")
+    print("  -m           Summation mode: pairwise (p), separate pos & neg (s), combined pos & neg (c)")
+    print("  -v VERB      Set verbosity level")
+    print("  -n N         Set number of holes (pigeons = N+1)")
+    print("  -o OUT.ipbip Set output file (PBIP or OPB format)")
 
 verbLevel = 1
 holeCount = 8
@@ -24,8 +25,12 @@ holeIds = []
 constraints = []
 inputCount = 0
 assertionCount = 0
+summationCount = 0
 useEquations = False
 opbOnly = False
+sumMode = 'p'
+
+sumModeNames = { 'p' : "pairwise", 's' : "holes/pigeons" , 'c' : "holes+pigeons" }
 
 # Identify variable for hole i, pigeon j (both numbered from 1)
 def pij(i,j):
@@ -97,6 +102,20 @@ def mergeHoles():
         assertionCount += 1
     return holeIds[-1]
 
+def sum(ids):
+    global constraints, summationCount
+    con = constraints[ids[0]-1]
+    for id in ids[1:]:
+        acon = constraints[id-1]
+        con = con.add(acon)
+    constraints.append(con)
+    nid = len(constraints)
+    sids = [str(id) for id in ids]
+    pwriter.doComment("Constraint #%d.  Sum constraints %s" % (nid, " ".join(sids)))
+    pwriter.doSum(con.genOpb(), ids)
+    summationCount += 1
+    return nid
+
         
 def build(n):
     global holeCount, pigeonCount, assertionCount
@@ -113,18 +132,32 @@ def build(n):
             print("PIGEON: Pseudo-Boolean encoding of PHP.  %s representation" % rep)
             print("%d pigeons, %d holes, %d constraints" % (pigeonCount, holeCount, inputCount))
         return
-    pid = mergePigeons()
-    hid = mergeHoles()
-    pcon = constraints[pid-1]
-    hcon = constraints[hid-1]
-    lcon = pcon.add(hcon)
-    pwriter.doComment("Combine pigeon and hole constraints to get conflict")
-    pwriter.doAssert(lcon.genOpb(), [pid, hid])
-    assertionCount += 1
+    newIds = []
+    if sumMode in ['p', 's']:
+        if sumMode == 'p':
+            pid = mergePigeons()
+            hid = mergeHoles()
+        else:
+            pid = sum(pigeonIds)
+            hid = sum(holeIds)
+        pcon = constraints[pid-1]
+        hcon = constraints[hid-1]
+        pwriter.doComment("Combine pigeon and hole constraints to get conflict")
+        pwriter.doConflict([pid, hid])
+        assertionCount += 1
+    elif sumMode == 'c':
+        pwriter.doComment("Sum all constraints to get conflict")
+        nid = sum(pigeonIds + holeIds)
+        if useEquations:
+            pwriter.doConflict([nid])
+            
+    else:
+        print("ERROR: Unknown summation mode '%s'" % sumMode)
+        sys.exit(1)
     if verbLevel >= 1:
-        print("PIGEON: Pseudo-Boolean encoding of PHP UNSAT proof. %s representation" % rep)
-        print("PIGEON: %d pigeons, %d holes, %d input steps %d assertion steps" 
-              % (pigeonCount, holeCount, inputCount, assertionCount))
+        print("PIGEON: Pseudo-Boolean encoding of PHP UNSAT proof. %s representation.  %s summation" % (rep, sumModeNames[sumMode]))
+        print("PIGEON: %d pigeons, %d holes, %d input steps %d assertion steps %d summation steps" 
+              % (pigeonCount, holeCount, inputCount, assertionCount, summationCount))
 
 
     
@@ -133,9 +166,10 @@ def run(name, argList):
     global verbLevel
     global useEquations
     global opbOnly
+    global sumMode
     outName = None
     n = None
-    optlist, args = getopt.getopt(argList, "hv:en:o:")
+    optlist, args = getopt.getopt(argList, "hv:m:en:o:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
@@ -148,7 +182,12 @@ def run(name, argList):
             n = int(val)
         elif opt == '-o':
             outName = val
-
+        elif opt == '-m':
+            if val not in ['p', 's', 'c']:
+                print("ERROR: Uknown mode '%s'" % val)
+                usage(name)
+                return
+            sumMode = val
     if outName is None:
         print("ERROR: Must provide output file name")
         usage(name)

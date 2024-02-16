@@ -29,6 +29,7 @@
 #include "signal.h"
 #include <sys/time.h>
 #include <string.h>
+#include <map>
 
 #include "report.h"
 #include "tbdd.h"
@@ -359,6 +360,9 @@ public:
 		case 'a':
 		    do_assertion(line);
 		    break;
+		case 's':
+		    do_sum(line);
+		    break;
 		default:
 		    err(true, "Line %d.  Invalid command '%c'\n", line_count+1, cmd);
 		    break;
@@ -530,6 +534,79 @@ private:
 	}
 	ilist_free(hint_ids);
 	report(2, "c Processed Assertion %d.  %d added clauses\n", line->get_id(), added_clauses());
+    }
+
+    void do_sum(pbip_line *line) {
+	// Implement priority queue of partial sums, with BDD sizes as the keys
+	// Use pseduo-random number generator to provide unique value for each key
+	Sequencer seq;
+	std::map<uint64_t,pb_constraint *> queue;
+	print_proof_comment(2, "Processing Summation #%d", line->get_id());
+	ilist hint_ids = ilist_new(0);
+	int id;
+	report(4, "   Hints:");
+	while (find_int(pbip_file, &id)) {
+	    hint_ids = ilist_push(hint_ids, id);
+	    report(4, " %d", id);
+	}
+	report(4, "\n");
+	if (ilist_length(hint_ids) < 1)
+	    err(true, "Line %d.  Expecting hint(s)\n", line_count+1);
+	for (int h = 0; h < ilist_length(hint_ids); h++) {
+	    int hid = hint_ids[h];
+	    if (hid < 1 || hid >= line->get_id())
+		err(true, "Line %d.  Invalid hint id %d\n", line_count+1, hid);
+	    pbip_line *arg_line = lines[hid-1];
+	    pb_constraint *arg_cp = arg_line->get_constraint();
+	    tbdd t = arg_line->get_tbdd_validation();
+	    int arg_size = arg_cp->get_nodecount();
+	    int64_t key = pack(arg_size, seq.next());
+	    report(5, "  Adding constraint #%d to argument queue with size %d\n", hid, arg_size);
+	    queue[key] = arg_cp;
+	}
+	while (queue.size() > 1) {
+	    auto fetch1 = queue.begin();
+	    int64_t key1 = fetch1->first;
+	    pb_constraint *arg1 = fetch1->second;
+	    queue.erase(key1);
+	    auto fetch2 = queue.begin();
+	    int64_t key2 = fetch2->first;
+	    pb_constraint *arg2 = fetch2->second;
+	    queue.erase(key2);
+	    if (verblevel >= 5) {
+		report(5, "Argument constraints: ");
+		arg1->show(stdout);
+		printf(", ");
+		arg2->show(stdout);
+		report(5, "\n");
+	    }
+	    pb_constraint *psum = pb_plus(arg1, arg2);
+	    if (verblevel >= 5) {
+		report(5, "   --> ");
+		psum->show(stdout);
+		report(5, "\n");
+	    }
+	    int psum_size = psum->get_nodecount();
+	    int64_t key = pack(psum_size, seq.next());
+	    report(5, "  Adding sum constraint to argument queue with size %d\n", psum_size);
+	    queue[key] = psum;
+	}
+	auto iter = queue.begin();
+	pb_constraint *sum = iter->second;
+	line->validate_tbdd(sum->get_validation());
+	pb_constraint *gen_con = line->get_constraint();
+	ilist gen_clause = only_bdd ? NULL : gen_con->try_clause();
+	if (gen_clause != NULL) {
+	    if (verblevel >= 4) {
+		printf("Creating clausal representation of implication: [");
+		ilist_print(gen_clause, stdout, " ");
+		printf("]\n");
+	    }
+	    int cid = gen_con->validate_clause(gen_clause);
+	    line->add_clause(cid, gen_clause);
+	}
+	ilist_free(hint_ids);
+	report(2, "c Processed Summation %d.  %d added clauses\n", line->get_id(), added_clauses());
     }
 };
 
