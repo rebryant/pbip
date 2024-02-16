@@ -4,25 +4,42 @@ PBIPDIR = ../../tools
 PGEN = ../generators/pigeon.py
 CNFGEN = $(PBIPDIR)/pbip_cnf.py
 PROOFGEN = $(PBIPDIR)/pbip_check.py
+PROOFGEN = $(PBIPDIR)/pbip-check
 LRATDIR = ~/repos/drat-trim
 LRAT = $(LRATDIR)/lrat-check
 VLEVEL=1
 
-php: php-$(N).ipbip
+phpcp: php-cp-$(N).ipbip
 
-phpe: phpe-$(N).ipbip
+phpcs: php-cs-$(N).ipbip
 
-php-all: php-$(N).ipbip php-$(N).pbip php-$(N).lrat php-$(N).ldata
-	cat php-$(N).{pdata,cnfdata,checkdata} > php-$(N).data
+phpcc: php-cc-$(N).ipbip
 
-phpe-all: phpe-$(N).ipbip phpe-$(N).pbip phpe-$(N).lrat phpe-$(N).ldata
-	cat phpe-$(N).{pdata,cnfdata,checkdata} > phpe-$(N).data
+phpep: php-ep-$(N).ipbip
 
-php-$(N).ipbip: $(PGEN)
-	$(INTERP) $(PGEN) -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+phpes: php-es-$(N).ipbip
 
-phpe-$(N).ipbip: $(PGEN)
-	$(INTERP) $(PGEN) -e -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+phpec: php-ec-$(N).ipbip
+
+
+php-cp-$(N).ipbip: $(PGEN)
+	$(INTERP) $(PGEN) -m p -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+
+php-cs-$(N).ipbip: $(PGEN)
+	$(INTERP) $(PGEN) -m s -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+
+php-cc-$(N).ipbip: $(PGEN)
+	$(INTERP) $(PGEN) -m c -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+
+php-ep-$(N).ipbip: $(PGEN)
+	$(INTERP) $(PGEN) -e -m p -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+
+php-es-$(N).ipbip: $(PGEN)
+	$(INTERP) $(PGEN) -e -m s -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+
+php-ec-$(N).ipbip: $(PGEN)
+	$(INTERP) $(PGEN) -e -m c -n $(N) -v $(VLEVEL) -o $@ | tee $*.pdata
+
 
 .SUFFIXES: .ipbip .pbip .lrat .ldata
 
@@ -30,7 +47,7 @@ phpe-$(N).ipbip: $(PGEN)
 	$(INTERP) $(CNFGEN) -v $(VLEVEL) -i $< -o $@ -c $*.cnf | tee $*.cnfdata
 
 .pbip.lrat:
-	$(INTERP) $(PROOFGEN) -v $(VLEVEL) -i $*.cnf -p $< -o $@ | tee $*.checkdata
+	$(PROOFGEN) -v $(VLEVEL) -i $*.cnf -p $< -o $@ | tee $*.checkdata
 
 .lrat.ldata:
 	$(LRAT) $*.cnf $< | tee $@
