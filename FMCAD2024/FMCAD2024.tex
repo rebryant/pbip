@@ -1,0 +1,407 @@
+\documentclass{fmcad}
+
+\usepackage{lipsum}
+\usepackage{stmaryrd}
+
+\bibliographystyle{ieeetr}
+
+\title{Working Title}
+\author{
+  \IEEEauthorblockN{
+    Karthik V. Nukala\IEEEauthorrefmark{1},
+    Soumyaditya Choudhuri\IEEEauthorrefmark{1},
+    Randal E. Bryant\IEEEauthorrefmark{1},
+    Marijn J. H. Heule\IEEEauthorrefmark{1}
+  }
+  \IEEEauthorblockA{\IEEEauthorrefmark{1}
+    Computer Science Department \\
+    Carnegie Mellon University, Pittsburgh, PA, United States \\
+    Email: \{kvn, soumyadc, rb3l, mheule\}@andrew.cmu.edu}
+}
+\begin{document}
+\maketitle
+\begin{abstract}
+  \lipsum[1]
+\end{abstract}
+
+\section{Introduction}
+\subsection{Related Work}
+
+\section{Preliminaries}
+\subsection{Pseudo-Boolean Formulas}
+\subsection{(Trusted) Binary Decision Diagrams}
+\section{PBIP: Pseudo-Boolean Implication Proof}
+\section{Implementation}
+
+\subsection{IPBIP: Hinting and Trimming Cutting-Planes Proofs}
+
+\subsection{PBIP Translation and CNF Generation}
+
+\subsection{BDD-Based PBIP Checking and LRAT Generation}
+
+\section{Results}
+\subsection{Benchmarks}
+
+\subsection{Discussion}
+
+\section{Conclusion}
+
+\section*{Acknowledgments}
+\addcontentsline{toc}{section}{Acknowledgments}
+\begin{itemize}
+\item Andy Oertel - Lund University
+\item Ciaran McCreesh - University of Glasgow
+\item Yong Kiam Tan - A*STAR Singapore
+\item Ruben Martins/Joseph Reeves - CMU
+\end{itemize}
+
+\newpage
+\section{Notes on Pseudo-Boolean Implication Proofs}
+\subsection{Pseudo-Boolean Formulas}
+A pseudo-Boolean constraint is a linear expression, viewing Boolean variables as ranging over integer
+values $0$ and $1$. That is, a relational constraint $c$ has the form
+\[
+  a_1 l_1 + a_2 l_2 + \dots + a_n l_n \quad \# \quad b
+\]
+where: 1) the relational operator $\#$ is $<, \leq, \geq, >$, and 2) the coefficients $a_i$, as
+well as the constant $b$, are integers. We can also represent an \textit{equational constraint},
+having relational operator $=$, as the conjunction of two ordering constraints having the same
+coefficients but one with operator $\leq$ and the other with operator $\geq$.
+
+Constraint $c$ denotes a Boolean function, written $\llbracket c \rrbracket$, mapping assignments
+to the set of variables $X$ to $1$ (true) or $0$ (false). Constraints $c_1$ and $c_2$ are said
+to be \textit{equivalent}  when $\llbracket c_1 \rrbracket = \llbracket c_2 \rrbracket$.
+Constraint $c$ is said to be \textit{infeasible} when $\llbracket c \rrbracket = \bot$, i.e.,
+it always evaluates to 0. $c$ is said to be \textit{trivial} when $\llbracket c \rrbracket = \top$,
+i.e., it always evaluates to $1$.
+
+As described in \cite{gocht2022certifying}, the following are some properties of pseudo-Boolean
+constraints:
+\begin{itemize}
+\item Constraints with relational operators $<$, $\leq$, and $>$ can be converted to equivalent
+  constraints with relational operator $\geq$.
+\item The logical negation of relational constraint $c$, written $\overline{c}$, can be expressed
+  as a relational constraint. That is, assume that $c$ has been converted to a form where it has
+  relational operator $>$. Then, replacing $\geq$ by $<$ yields the negation of $c$.
+\end{itemize}
+
+We will generally assume that constraints have relational operator $\geq$, since other forms can
+be translated to it.
+
+We consider two \textit{normalized forms} for ordering constraints: a \textit{coefficient-normalized}
+constraint has only nonnegative coefficients. By convention, we require with this form that literal
+$l_i = x_i$ for any $i$ such that $a_i = 0$. A \textit{variable-normalized} constraint has only
+positive literals. Converting between the two forms is straightforward using the identity
+$\overline{x_i} = 1 - x_i$. In reasoning about PB constraints, the two forms can be used
+interchangeably. Typically, the coefficient-normalized form is more convenient when viewing a PB
+constraint as a logical expression, while the variable-normalized form is more convenient when
+viewing a constraint as an arithmetic expression. We focus on the logical aspects, giving
+the general form of constraint $c$ as
+\begin{equation}
+  \label{eq:gen-constraint}
+  a_1 l_1 + a_2 l_2 + \dots + a_n l_n \geq b
+\end{equation}
+with each $a_i \geq 0$ and with $l_i = x_i$ whenever $a_i = 0$.
+
+Ordering constraint $c$ in coefficient-normalized form is trivial if and only if $b \leq 0$.
+Similarly, $c$ is infeasible if and only if $b > \sum_{1 \leq i \leq n} a_i$. By contrast, testing
+feasibility or triviality of an equational constraint is not straightforward, in that an instance
+of the subset sum problem \cite{garey1972optimal} can be directly encoded as an equational constraint.
+
+An \textit{assignment} is a mapping $\rho : X' \rightarrow \{0, 1\}$, for some $X' \subseteq X$.
+The assignment is \textit{total} when $X' = X$ and \textit{partial} when $X' \subset X$. Assignment
+$\rho$ can also be viewed as a set of literals, where $x_i \in \rho$ when $\rho(x_i) = 1$ and
+$\overline{x_i} \in \rho$ when $\rho(x_i) = 0$. Assignment $\rho$ is said to be \textit{consistent}
+with assignment $\rho'$ when $\rho \subseteq \rho'$.
+
+Some nomenclature regarding constraints of the form of \ref{eq:gen-constraint} will prove useful.
+The \textit{constraint literals} are those literals $l_i$ such that $a_i \neq 0$.
+A \textit{cardinality constraint} has $a_i \in \{0, 1\}$ for $1 \leq i \leq n$. A cardinality
+constraint with $b = 1$ is referred to as a \textit{clausal constraint}: at least one of the
+constraint literals must be assigned 1 to satisfy a constraint. It is logically equivalent
+to a clause in a conjunctive normal form (CNF) formula. A cardinality constraint with
+$\sum_{1 \leq i \leq n} a_i = b$ is referred to as a \textit{conjunction}: all of the constraint
+literals must be assigned 1 to satisfy the constraint. A conjunction for which $a_i = 1$ for just
+a single value of $i$ is referred to as a \textit{unit} constraint: it is satisfied if and only
+if literal $l_i$ is assigned 1.
+
+We let $c|_{\rho}$ denote the constraint resulting when $c$ is simplified according
+to assignment $\rho$. Assume $c$ has the form of \ref{eq:gen-constraint} and partition the indices
+$i$ for $1 \leq i \leq n$ into three sets: $I^+$, consisting of those indices $i$ such that
+neither $l_i$ nor $\overline{l_i}$ is in $\rho$. With this, $c|_\rho$ can be written as
+$\sum_{1 \leq i \leq n} a_i' \geq b'$ with $a_i'$ equal to $a_i$ for $i \in I^X$ and equal to 0
+otherwise, and with $b' = b - \sum_{i \in I^+} a_i$.
+
+A pseudo-Boolean \textit{formula} $F$ is a set of pseudo-Boolean constraints. We say that $F$ is
+\textit{satisfiable} when there is some assignment $\rho$ that satisfies all of the constraints in
+$F$, and \textit{unsatisfiable} otherwise.
+
+\subsection{(Reverse) Unit Propagation}
+Consider constraint $c$ in coefficient-normalized form. Literal $l_i$ is \textit{unit propagated}
+by $c$ when the assignment $\rho = \{\overline{l_i}\}$ causes the constraint $c|_\rho$ to become
+infeasible. As the name implies, a unit-propagated literal $l_i$ then becomes a unit constraint.
+Observe that a single constraint can unit propagate multiple literals. For example,
+$4x_1 + 3\overline{x_2} + x_3 \geq 6$ unit propagates both $x_1$ and $\overline{x_2}$. For constraint
+$c$ in coefficient-normalized form \ref{eq:gen-constraint}, detecting which literals unit propagate
+is straightforward. Let $A = \sum_{1 \leq i \leq n} a_i$. Then, literal $l_i$ unit propagates if
+and only if $A - a_i < b$ i.e., $a_i > A - b$. For example, the constraint
+$4 x_1 + 3 \overline{x_2} + x_3 \geq 6$ has $A = 7$ and $b = 6$, yielding $A - b = 1$. This
+justifies the unit propagation of both $x_1$ and $\overline{x_2}$.
+
+For constraint $c$, we let $Unit(c)$ denote the set of literals it unit propagates. Often, by
+simplifying a constraint $c$ according to a partial assignment $\rho$, the simplified constraint
+$c|_\rho$ will unit propagate new literals, given by $Unit(c|_\rho)$. These literals can then be
+added to the partial assignment. Formally, define the operation $Uprop$ as
+$Uprop(\rho, c) = \rho \cup Unit(c|_\rho)$. \textit{Unit propagation} is then the process of
+repeatedly applying this operation to a set of constraints to expand the set of literals in a
+partial assignment.
+
+Consider a formula $F$ consisting a set of constraints $c_1, c_2, \dots, c_m$. The \textit{reverse
+  unit propagation} (RUP) proof rule \cite{gocht2022certifying} uses unit propagation to prove
+that \textit{target constraint} $c$ can be added to a formula while preserving its set of
+satisfying assignments. That is, any assignment that satisfies $F$ also satisfies $F \land c$.
+A RUP \textit{addition} justifies $c$ by assuming $\overline{c}$ holds and showing, via a sequence
+of \textit{RUP steps}, that this leads to a contradiction. It accumulates a partial assignment
+$\rho$ based on unit propagations starting with the empty set. Each RUP step accumulates more
+assigned literals by performing a unit propagation of the form $\rho \leftarrow Uprop(\rho, d)$,
+where $d$ is either $c_j$, a prior constraint, or $\overline{c}$, the negation of the target
+constraint. The final step causes a contradiction, where $d|_\rho$ is infeasible.
+
+\section{Pseudo-Boolean Implication Proofs}
+A Pseudo-Boolean Implication Proof (PBIP) provides a systematic way to prove that a PB formula $F$
+is unsatisfiable. It is given by a sequence of constraints, referred to as the
+\textit{proof sequence}:
+
+\[
+  c_1, c_2, \dots, c_m, c_{m + 1}, \dots, c_t
+\]
+
+such that the first $m$ constraints are those of formula $F$, while each \textit{added} constraint
+$c_i$ for $i > m$ follows by implication from the preceding constraints. That is,
+\begin{equation}
+  \label{eq:clausal-impl}
+  \bigwedge_{1 \leq j < i} \llbracket c_j \rrbracket \Rightarrow \llbracket c_i \rrbracket
+\end{equation}
+
+The proof completes with the addition of an infeasible constraint for $c_t$. By the transitivity
+of implication, we have therefore proved that $F$ is not satisfiable.
+
+Constraints $c_i$ with $i > m$, can be added in two different ways, corresponding to two
+different reasoning modes.
+
+\begin{enumerate}
+\item In \textit{implication mode}, constraint $c_i$ follows by implication from at most two prior
+  constraints in the proof sequence. That is, for some $H_i \subseteq \{c_1, c_2, \dots, c_{i - 1}\}$
+  with $|H_i| \leq 2$ such that:
+  \begin{equation}
+    \label{eq:clausal-hints}
+    \bigwedge_{c_j \in H_i} \llbracket c_j \rrbracket \Rightarrow \llbracket c_i \rrbracket
+  \end{equation}
+
+  Set $H_i$  is referred to as the \textit{hint} for proof step $i$.
+\item In \textit{RUP mode}, the new constraint is justified by a reverse unit propagation addition.
+  A sequence of hints is provided defining the RUP steps. Each hint is of the form $[d_1, m_1],
+  [d_2, m_2], \dots, [d_{k - 1}, m_{k - 1}], [d_k]$, where each $m_j$ is a unit-propagated literal,
+  and $d_j$ is either a previous constraint $c_{i'}$ for $i' < i$, or it is the negated target
+  constraint $\overline{c_i}$. The final hint $[d_k]$ should have a conflict with literals
+  $\{m_1, m_2, \dots, m_{k - 1}\}$. If a single constraint unit propagates multiple literals,
+  these are listed as separate steps.
+\end{enumerate}
+
+Unless $P = NP$, we cannot guarantee that a proof checker can validate even a single implication
+step of a PBIP proof in polynomial time. In particular, consider an equational constraint $c$
+encoding an instance of the subset sum problem, and let $c_{\leq}$ and $c_{\geq}$ denote its conversion
+into a pair of ordering constraints such that $\llbracket c \rrbracket = \llbracket c_{\leq}
+\rrbracket \land \llbracket c_\geq \rrbracket$. Consider a PBIP proof to add the constraint
+$\overline{c_{\leq}}$ having the $c_{\geq}$ as the only hint. Proving that
+$\llbracket c_\geq \rrbracket \Rightarrow \llbracket \overline{c_\leq} \rrbracket$, requires proving
+that $\llbracket c_\leq \rrbracket \land \llbracket \c_\geq \rrbracket = \bot$, i.e., that
+$c$ is unsatisfiable.
+
+On the other hand, checking the correctness of a PBIP proof can be performed in
+\textit{pseudo-polynomial} time, meaning that the complexity will be bounded by a polynomially sized
+formula over the numeric values of the integer parameters. This can be done using binary decision
+diagrams \cite{bryant2022clausal}. In particular, an ordering constraint over $n$ variables in
+coefficient-normalized form with constant $b$ will have a BDD representation with at most $b \cdot n$
+nodes. For an implication proof step where the added constraints and the hints all have constants
+less than or equal to $b$, the number of BDD operations to validate the step will be $O(b^2 \cdot n)$
+when there is a single hint and $O(b^3 \cdot n)$ when there are two hints. This complexity is
+polynomial in $b$, but it would be exponential in the size of a binary representation of $b$. The
+number of BDD operations for each unit propagation step in a RUP proof will be linear in the size
+of the BDD and therefore $O(b \cdot n)$.
+
+\section{PBIP (Pseudo-Boolean Implication Proof) Format (pbip.txt)}
+
+The PBIP (Pseudo-Boolean Implication Proof) format describes a sequence of transformations on
+a set of pseudo-Boolean constraints leading to an infeasible constraint. The file therefore
+describes an unsatisfiability proof for a PB constraint problem.
+
+Two reasoning modes are supported:
+\begin{itemize}
+\item Implication mode, where each new constraint follows by implication from one or two
+  previous constraints
+\item Reverse unit propagation (RUP) mode, where the validity of a constraint is proved by
+  contradiction. That is, a series of unit propagations are performed based on the complement of
+  the constraint and other constraints until a contradiction is reached.
+\end{itemize}
+
+The format assumes that each input constraint is encoded as a set of clauses in conjunctive normal
+form (CNF). The clauses for all of the constraints are provided as a file in the standard DIMACS
+format.
+
+When in implication mode, each derived constraint must follow by implication from either one or two
+preceding constraints, referred to as the ``antecedents''. That is, consider PB constraints $P_1,
+P_2$, and $P$. Each of these encodes a Boolean function. For $P$ to follow from $P_1$, the constraints
+must satisfy $P_1 \Longrightarrow P$. An antecedent constraint can be any of the following: an input
+constraint, one proved by an implication step, or the target constraint of a completed RUP reasoning
+sequence.
+
+When in RUP mode, the constraint to be derived is set as a target, and a (initially empty) set of unit
+constraints is accumulated. Each RUP step then derives one or more additional unit constraints based
+on the set of previously derived unit constraints, as well as either the complement of the target
+constraint or some other preceding constraint. The final step should then cause a contradiction - the
+set of accumulated unit constraints falsifies the final constraint.
+
+PBIP files build on the OPB format for describing PB constraints, as documented in \cite{roussel2012input}.
+
+We allow an extension to the OPB format for writing a PB formula: a variable name of the form
+\texttt{xN} can be preceded by \texttt{~} (e.g. \texttt{~x2}) to indicate its logical negation.
+This extension is also allowed by many other tools.
+
+There are five types of lines:
+\begin{enumerate}
+\item Comment lines begin with ``*'' and contain arbitrary text.
+\item Input lines begin with ``i''. This is followed by a constraint, expressed in OPB format,
+  and terminated by ``;''. Then, a set of clause numbers is listed, separated by spaces and
+  terminated with end-of-line. Forming the conjunction of these clauses an existentially quantifying
+  any variables that are not listed in the PB formula should yield a Boolean function implying that
+  of the PB constraint.
+\item Implication-mode assertion lines begin with ``a''. This is followed by a constraint,
+  expressed in OPB format and terminated by ``;''. Then, either one or two constraint IDs is
+  listed, separated by spaces and terminated with end-of-line. Constraints are numbered from 1,
+  starting with the input constraints.
+\item RUP lines begin with ``u''. This is followed by a constraint, expressed in OPB format and
+  terminated by ``;''. Then, a sequence of lists is given, where each list is of the form
+  $[C \; L1 \; \dots \; L_k]$, indicating that constraint $C$ will propagate additional units
+  $L_1, \dots, L_k$. $C$ can either be the ID of a previous constraint, or it can be that
+  of the current constraint. The latter case is known as a ``self reference'', and its unit
+  propagations should be based on the negation of the target constraint. The final list is of
+  the form $[C]$, and it must be falsified by the accumulated set of literals.
+\item Summation implication lines begin with ``s''. This is followed by a constraint $C$,
+  expressed in OPB format and terminated by ``;''. Then, a set of constraint IDs is listed,
+  separataed by spaces and terminated with end-of-line. These IDs identify a set of prior constraints
+  $C_1, C_2, \dots, C_k$ satisfying:
+  \[
+    \sum_{i = 1}^{k} C_i \Longrightarrow C
+  \]
+
+  This line avoids the need to expand a summation of $k$ constraints into $k - 1$ implication lines.
+  Instead, the checker performs the summations and tests the final implication, using heuristics
+  to optimize the order in which the $k$ constraints are summed.
+\end{enumerate}
+
+For an unsatisfiability proof, the final constraint should be infeasible, e.g. $0 \geq 1$.
+
+
+
+\section{Converting PBIP Proof into Clausal Proof }
+We convert PBIP proofs into clausal proofs in the LRAT format using \textit{trusted} Binary
+Decision Diagrams, or TBDDs. TBDDs extend conventional BDDs by having their standard operations
+also generate proof steps. We denote BDDs by their root nodes, using bold letters, e.g.
+$\mathbf{u}$. A TBDD $\dot{\mathbf{u}}$ consists of the following:
+
+\begin{itemize}
+\item A BDD having root node $\mathbf{u}$
+\item A Boolean extension variable $u$ along with an associated proof clause defining the semantic
+  relation between $\mathbf{u}$, the node variable $x$, and child nodes $\mathbf{u_1}$ and
+  $\mathbf{u_0}$
+\item A proof of the unit clause $[u]$ indicating that the BDD will evaluate to 1 for any
+  assignment that satisfies the input formula.
+\end{itemize}
+
+We assume our trusted BDD package implements the following operations:
+
+\begin{itemize}
+\item $\mathsf{BDD}(c)$: Generate a BDD representation of pseudo-Boolean constraint $c$
+\item $\mathsf{BDD\_AND}(\mathbf{u}, \mathbf{v})$: Compute BDD $\mathbf{w}$ as the conjunction
+  of BDDs $\mathbf{u}$ and $\mathbf{v}$. Also, generate proof steps ending with the addition
+  of the clause $[\overline{u} \lor \overline{v} \lor w]$ proving the clause
+  $(u \land v) \Rightarrow w$.
+\item $\mathsf{BDD\_IMPLY}(\mathbf{u}, \mathbf{v})$: Generate proof steps ending with the addition
+  of the clause $[\overline{u} \lor v]$ indicating that $[u \Rightarrow v]$.
+\item $\mathsf{BDD\_AND\_LITERALS}(L)$: For a set of literals $L = \{m_1, m_2, \dots, m_k\}$
+  generate a BDD representation $\mathbf{u}$ of $\bigwedge_{1 \leq j \leq k} m_j$ and add clause
+  $[\overline{m_1} \lor \overline{m_2} \lor \dots \lor \overline{m_k} \lor u]$ to the proof.
+\item $\mathsf{BDD\_OR\_LITERALS}(L)$: For a set of literals $L = \{m_1, m_2, \dots, m_k\}$ generate
+  a BDD representation $\mathbf{u}$ of $\bigvee_{1 \leq j \leq k} m_j$ and add clause
+  $[m_1 \lor m_2 \lor \dots \lor m_k \lor \overline{u}]$ to the proof.
+\item $\mathsf{TBDD\_FROM\_CLAUSE}(C)$: Generate a TBDD representation $\mathbf{\dot{u}}$ of the
+  proof clause $C$.
+\end{itemize}
+
+Our goal is to create a TBDD representation $\mathbf{\dot{u}}_i$ for each constraint $\mathbf{c_i}$
+in the proof sequence. The final step will generate a trusted BDD for the BDD leaf node representing
+false. This will cause the empty clause to be added to the proof. When adding constraint $c_i$, its
+BDD representation $\mathbf{u}_i$ can be generated as $\mathsf{BDD}(c_i)$. To upgrade this to the
+trusted BDD $\mathbf{\dot{u}}_i$ requires generating the unit clause $[u_i]$. We assume that
+every prior proof constraint $c_{i'}$, with $i' < i$, has a TBDD representation $\mathbf{\dot{u}}_i$
+with an associated unit clause $[u_{i'}]$.
+
+When $c_i$ is added by implication mode, generating its unit clause is based on the constraints
+given as the hint. If the hint consists of the single constraint $c_{i'}$, we can make use of its
+TBDD representation $\mathbf{\dot{u}}_{i'}$ by performing the implication test
+$\mathsf{BDD\_IMPLY}(\mathbf{u}_{i'}, \mathbf{u}_i)$, generating the clause $[\overline{u}_{i'}, u_i]$.
+Resolving this with the unit clause $[u_{i'}]$ then gives the unit clause $[u_i]$. When the hint
+consists of two constraints $c_{i'}$ and $c_{i''}$, we can make use of their TBDD representations
+$\mathbf{\cdot{u}}_{i'}$ and $\mathbf{\cdot{u}}_{i''}$. That is, let
+$\mathbf{w} = \mathsf{BDD\_AND}(\mathbf{\cdot{u}}_{i'}, \mathbf{\cdot{u}}_{i''})$, generating the
+clause $[\overline{u}_{i'} \lor \overline{u}_{i''} \lor w]$, and then perform the implication test
+$\mathsf{BDD\_IMPLY}(w, \mathbf{u}_i)$, generating the clause $[\overline{w} \lor u_i]$. Resolving
+these clauses with the unit clauses for TBDDs $\mathbf{\dot{u}}_{i'}$ and $\mathbf{\dot{u}}_{i''}$
+yields the unit clause $[u_i]$.
+
+Adding constraint $c_i$ via a RUP addition rqeuires performing a series of clause generations for
+each RUP step and then assembling the generated clauses as the hints for a single clausal RUP
+addition. Suppose we start with the partial assignment $\rho_0 = \emptyset$ and accumulate
+successive literals through unit propagation, such that $\rho_j = \rho_{j - 1} \cup \{m_j\}$ for
+$1 \leq j < k$. For step $j$, the RUP hint is of the form $[d_j, m_j]$. We justify the unit
+propagation of literal $m_j$ based on the assignment $\rho_{j - 1} \cup \{\overline{m}_j\}$. That is,
+when $d_j = c_{i'}$ for some $i' < i$, calling
+$\mathsf{BDD\_OR\_LITERALS}(\{\overline{l} \mid l \in \rho_{j - 1}\} \cup \rho_{j - 1} \cup \{\overline{m}_j\})$ will generate BDD node $\mathbf{v}$ as well as proof clause
+$[\overline{m}_1 \lor \overline{m}_2 \lor \dots \lor \overline{m}_{j - 1} \lor m_j \lor \overline{v}]$,
+and then calling $\mathsf{BDD\_IMPLY}(\mathbf{u}_{i'}, \mathbf{v})$ will generate the proof clause
+$[\overline{u}_{i'} \lor v]$. Resolving these two clauses, along with unit clause $[u_{i'}]$ yields
+proof clause $H_j = [\overline{m}_1 \lor \overline{m}_2 \lor \dots \overline{m}_{j - 1} \lor m_j \lor u_i]$.
+The final RUP step will not involve any unit propagations. It will generate either proof clause
+$H_k = [\overline{m}_1 \lor \overline{m}_2 \lor \dots \lor \overline{m}_{k - 1}]$ or proof clause
+$H_k = [\overline{m}_1 \lor \overline{m}_2 \lor \dots \lor \overline{m}_{k - 1} \lor u_i]$. The final
+clausal RUP addition has unit clause $[\overline{u}_i]$ and accumulate the literals
+$m_1, m_2, \dots, m_{k - 1}$ as unit literals from the hints. The final clause will cause a conflict.
+
+
+\section{Optimizing for Clausal Constraints}
+In practice, many of the constraints encountered in PBIP proofs are of the form
+$c = m_1  + m_2 + \dots + m_k \geq 1$. This is logically equivalent to the clause
+$C = [m_1 \lor m_2 \lor \dots m_k]$. We can convert PBIP RUP additions into clausal
+proofs using such constraints directly, rather than converting them to BDDs. To do
+so, clause $C$ must occur in the proof. If $C$ was derived by our (modified) RUP derivation,
+then it will already be part of the proof. Otherwise, for a constraint represented by
+$\mathbf{\dot{u}}$ invoking $\mathsf{BDD\_OR\_LITERALS}(C)$ should return node $\mathbf{u}$
+as the result, and we can resolve the generated proof clause with the unit clause $[u]$
+to get $C$ added as a proof clause. On the other hand, if the proof clause $C$ is later needed
+as part of the hint for an implication-mode addition, we can generate its TBDD representation
+$\mathbf{\dot{u}}$ with $\mathsf{TBDD\_FROM\_CLAUSE}(C)$.
+
+We consider two refinements to our method of converting the RUP derivations of PBIP into
+RUP derivations in the clausal proof. First, suppose some RUP step $[d_j, m_j]$ has
+$d_j = c_{i'}$ and constraint $c_{i'}$ is represented as clause $C_{i'}$. Then, we can let
+$H_j = c_{i'}$ and have the RUP checker use it for unit propagation. Second, suppose the target
+constraint $c_i$ is itself clause $C_i$. Then, final clause RUP addition can have $C$ as its
+target, and we can build the hint sequence $H_1, H_2, \dots, H_k$ by starting with assignment
+$\rho_0$ consisting of the negated literals of $C_i$. With these optimizations, we can see
+that if a PBIP proof is simply a constraint version of a clausal RUP proof, we will generate
+that clausal proof.
+
+
+\bibliography{FMCAD2024}
+\end{document}
