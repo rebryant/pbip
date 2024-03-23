@@ -761,7 +761,7 @@ class Pbip:
                 tclause = None
         self.tclauseList.append((tclause, tcid))
         for con in clist:
-            self.maxConstant = max(self.maxConstant, abs(con.variableNormalizedCval()))
+            self.maxConstant = max(self.maxConstant, abs(con.coefficientNormalizedCval()))
         if not clauseOnly:
             for con in clist:
                 con.buildBdd(self)

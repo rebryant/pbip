@@ -252,9 +252,9 @@ class CnfGenerator:
         hlist = self.hintList[cid-1]
         comments = self.commentsList[cid-1]
         if len(clist) == 1:
-            opbstring = clist[0].opbString(variableNormalized = True)
+            opbstring = clist[0].opbString(coefficientNormalized = True)
         else:
-            opbstring = clist[0].opbString(forceEquality = True, variableNormalized = True)
+            opbstring = clist[0].opbString(forceEquality = True, coefficientNormalized = True)
         for com in comments:
             self.pwriter.doComment(com)
         self.pwriter.doComment("Constraint #%d" % cid)
