@@ -75,7 +75,7 @@ Constraint $c$ is said to be \textit{infeasible} when $\llbracket c \rrbracket =
 it always evaluates to 0. $c$ is said to be \textit{trivial} when $\llbracket c \rrbracket = \top$,
 i.e., it always evaluates to $1$.
 
-As described in \cite{gocht2022certifying}, the following are some properties of pseudo-Boolean
+As described in \cite{gocht_phd_2022}, the following are some properties of pseudo-Boolean
 constraints:
 \begin{itemize}
 \item Constraints with relational operators $<$, $\leq$, and $>$ can be converted to equivalent
@@ -157,7 +157,7 @@ repeatedly applying this operation to a set of constraints to expand the set of 
 partial assignment.
 
 Consider a formula $F$ consisting a set of constraints $c_1, c_2, \dots, c_m$. The \textit{reverse
-  unit propagation} (RUP) proof rule \cite{gocht2022certifying} uses unit propagation to prove
+  unit propagation} (RUP) proof rule \cite{gocht_phd_2022} uses unit propagation to prove
 that \textit{target constraint} $c$ can be added to a formula while preserving its set of
 satisfying assignments. That is, any assignment that satisfies $F$ also satisfies $F \land c$.
 A RUP \textit{addition} justifies $c$ by assuming $\overline{c}$ holds and showing, via a sequence
@@ -215,7 +215,7 @@ into a pair of ordering constraints such that $\llbracket c \rrbracket = \llbrac
 \rrbracket \land \llbracket c_\geq \rrbracket$. Consider a PBIP proof to add the constraint
 $\overline{c_{\leq}}$ having the $c_{\geq}$ as the only hint. Proving that
 $\llbracket c_\geq \rrbracket \Rightarrow \llbracket \overline{c_\leq} \rrbracket$, requires proving
-that $\llbracket c_\leq \rrbracket \land \llbracket \c_\geq \rrbracket = \bot$, i.e., that
+that $\llbracket c_\leq \rrbracket \land \llbracket c_\geq \rrbracket = \bot$, i.e., that
 $c$ is unsatisfiable.
 
 On the other hand, checking the correctness of a PBIP proof can be performed in
