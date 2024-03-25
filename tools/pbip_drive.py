@@ -50,6 +50,8 @@ modeDict = {'s':"sdp", 'b':"bucket" }
 
 # Pathnames
 repo = "/Users/bryant/repos/pbip"
+interp = "python3"
+genCnf = repo + "/tools/pbip_cnf.py"
 genProgram = repo + "/tools/pbip-check"
 
 checkProgram = "lrat-check"
@@ -136,6 +138,25 @@ def genLogName(root, home):
     logName = home + "/" + root + "." + extension
     return logName
 
+def runCnf(root, home):
+    ipbipName = home + "/" + root + ".ipbip"
+    pbipName = home + "/" + root + ".pbip"
+    cnfName = home + "/" + root + ".cnf"
+    logName = genLogName(root, home)
+    cmd = [interp, genCnf]
+    cmd += ["-v", str(verbLevel)]
+    cmd += ["-i", ipbipName]
+    cmd += ["-o", pbipName]
+    cmd += ["-c", cnfName]
+    try:
+        logFile = open(logName, "w")
+    except:
+        print("%s ERROR:Couldn't open file '%s'" % (root, logName))
+        return
+    ok = runProgram("CNF", root, cmd, logFile)
+    print("File %s written" % logName)
+    logFile.close()
+
 def runPbip(root, home):
     cnfName = home + "/" + root + ".cnf"
     pbipName = home + "/" + root + ".pbip"
@@ -149,7 +170,7 @@ def runPbip(root, home):
     cmd += ["-p", pbipName]
     cmd += ["-o", lratName]
     try:
-        logFile = open(logName, "w")
+        logFile = open(logName, "a")
     except:
         print("%s ERROR:Couldn't open file '%s'" % (root, logName))
         return
@@ -193,6 +214,9 @@ def runBatch(home, fileList, force):
         if not force and os.path.exists(logName):
             print("Already have file '%s'.  Skipping" % logName)
             continue
+        if not runCnf(r, home) and exitWhenError:
+            print("CNF Error encountered.  Exiting")
+            break
         if not runPbip(r, home) and exitWhenError:
             print("PBIP Error encountered.  Exiting")
             break

@@ -4,15 +4,15 @@ import sys
 import getopt
 import datetime
 
+import cardinality
 import bdd
 import solver
 import pbip
 
 def usage(name):
-    print("Usage %s: [-h] [-v VERB] [-b] [-r] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
+    print("Usage %s: [-h] [-v VERB] [-r] -i INFILE.ipbip -c OUTFILE.cnf -o OUTFILE.pbib")
     print("  -h              Print this message")
     print("  -v VERB         Set verbosity level")
-    print("  -b              Pure BDD mode.  Don't make use of clausal representations")
     print("  -r              Rename variables to improve variable ordering")
     print("  -i INFILE.ipbip Input PBIP file (with unhinted inputs)")
     print("  -o OUTFILE.pbip Output PBIP file (with hints)")
@@ -88,7 +88,8 @@ class CnfWriter(Writer):
     # requires providing the number of clauses.
 
     def doComment(self, line):
-        self.items.append((False, line))
+        if self.verbLevel >= 2:
+            self.items.append((False, line))
 
     def doClause(self, literals):
         for lit in literals:
@@ -157,12 +158,13 @@ class CnfWriter(Writer):
 class PbipWriter(Writer):
     commandCount = 0
     
-    def __init__(self, fname, verbLevel = False):
+    def __init__(self, fname, verbLevel = 1):
         Writer.__init__(self, fname, verbLevel=verbLevel)
         self.commandCount = 0
 
     def doComment(self, line):
-        self.show("* " + line)
+        if self.verbLevel >= 2:
+            self.show("* " + line)
 
     def doCommand(self, cmd, opbstring, hints):
         shints = []
@@ -183,7 +185,6 @@ class PbipWriter(Writer):
 
 class CnfGenerator:
     verbLevel = 1
-    bddOnly = False
     rename = True
     cwriter = None
     preader = None
@@ -194,13 +195,13 @@ class CnfGenerator:
     commentsList = []
     prover = None
     manager = None
+    cardinalityManager = None
     inputVariableCount = 0
     # Map from tuple representation of clause to its ID
     clauseMap = {}
     
-    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, bddOnly, rename):
+    def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, rename):
         self.verbLevel = verbLevel
-        self.bddOnly = bddOnly
         self.rename = rename
         self.cwriter = CnfWriter(cnfName, verbLevel)
         self.preader = pbip.PbipReader(inPbipName, verbLevel)
@@ -224,15 +225,33 @@ class CnfGenerator:
                     self.inputVariableCount = max(self.inputVariableCount, mvar)
         if self.verbLevel >= 1:
             print("CNFGEN: Read %d constraints.  Found %d input variables" % (len(self.commandList), self.inputVariableCount))
+        self.cardinalityManager = cardinality.Manager(self.inputVariableCount+1, self.cwriter)
+        self.manager = None
+        self.prover = None
+   
+    def setupBdd(self, startXvar):
         # Set up prover, but disable LRAT output
-        self.prover = solver.Prover(fname="", writer = solver.StdOutWriter(), verbLevel = verbLevel, doLrat = False)
-        self.manager = bdd.Manager(prover = self.prover, nextNodeId = self.inputVariableCount+1, verbLevel = verbLevel)
+        self.prover = solver.Prover(fname="", writer = solver.StdOutWriter(), verbLevel = self.verbLevel, doLrat = False)
+        self.manager = bdd.Manager(prover = self.prover, nextNodeId = startXvar, verbLevel = self.verbLevel)
         for id in range(1, self.inputVariableCount+1):
             var = self.manager.newVariable(name = "V%d" % id)
         self.varMap = { var.id : var for var in self.manager.variables }
         self.levelMap = { var.id : var.level for var in self.manager.variables }
-    
+
+
     def run(self):
+        # In general, must make two passes over the inputs to generate CNF
+        # and add the clause Ids as hints
+        needBdd = False
+        for cid in range(1, len(self.commandList)+1):
+            nb = self.processCardinalityInput(cid)
+            needBdd = needBdd or nb
+
+        if needBdd:
+            self.setupBdd(self.cardinalityManager.nextXvar())
+            for cid in range(1, len(self.commandList)+1):
+                self.processBddInput(cid)
+        # Now can process the commands
         for cid in range(1, len(self.commandList)+1):
             self.processCommand(cid)
         if self.verbLevel >= 1:
@@ -245,6 +264,46 @@ class CnfGenerator:
         self.preader.finish()
         self.pwriter.finish()
 
+    def processCardinalityInput(self, cid):
+        cmd = self.commandList[cid-1]
+        if cmd != 'i':
+            return False
+        clist = self.constraintList[cid-1]
+        if len(clist) > 1:
+            return True
+        con = clist[0]
+        if not con.isCardinality():
+            return True
+        constant = con.coefficientNormalizedConstant()
+        literals = con.coefficientNormalizedLiterals()
+        clist = self.cardinalityManager.build(literals, constant)
+        self.hintList[cid-1] = clist
+        return False
+
+    def processBddInput(self, cid):
+        cmd = self.commandList[cid-1]
+        if cmd != 'i':
+            return
+        if len(self.hintList[cid-1]) > 0:
+            return
+        clist = self.constraintList[cid-1]
+        clist[0].buildBdd(self)
+        root = clist[0].root
+        if len(clist) > 1:
+            clist[1].buildBdd(self)
+            root = self.manager.applyAnd(root, clist[1].root)
+        self.cwriter.doComment("Added clauses for constraint #%d from BDD" % cid)
+        clauses = self.manager.generateClauses(root, up=False)
+        hlist = []
+        for clause in clauses:
+            tclause = tuple(clause)
+            if tclause in self.clauseMap:
+                id = self.clauseMap[tclause]
+            else:
+                id = self.cwriter.doClause(clause)
+                self.clauseMap[tclause] = id
+            hlist.append(id)
+        self.hintList[cid-1] = hlist
 
     def processCommand(self, cid):
         cmd = self.commandList[cid-1]
@@ -257,52 +316,23 @@ class CnfGenerator:
             opbstring = clist[0].opbString(forceEquality = True, coefficientNormalized = True)
         for com in comments:
             self.pwriter.doComment(com)
+        if cmd == 'k':
+            cmd = 'u'
         self.pwriter.doComment("Constraint #%d" % cid)
-        if cmd == 'i':
-            self.cwriter.doComment("Clauses for input constraint #%d: %s" % (cid, opbstring))
-            clauses = None
-            if not self.bddOnly and len(clist) == 1:
-                tclause = clist[0].getClause()
-                if tclause is not None:
-                    clauses = [tclause]
-            if clauses is None:
-                for con in clist:
-                    con.buildBdd(self)
-                if len(clist) == 1:
-                    root = clist[0].root
-                else:
-                    root = self.manager.applyAnd(clist[0].root, clist[1].root)
-                clauses = self.manager.generateClauses(root, up=False)
-            hlist = []
-            for clause in clauses:
-                tclause = tuple(clause)
-                if tclause in self.clauseMap:
-                    id = self.clauseMap[tclause]
-                else:
-                    id = self.cwriter.doClause(clause)
-                    self.clauseMap[tclause] = id
-                hlist.append(id)
-            self.pwriter.doInput(opbstring, hlist)
-        else:
-            if cmd == 'k':
-                cmd = 'u'
-            self.pwriter.doCommand(cmd, opbstring, hlist)
+        self.pwriter.doCommand(cmd, opbstring, hlist)
 
 def run(name, argList):
     verbLevel = 1
-    bddOnly = False
     rename = False
     cnfName = ""
     inPbipName = ""
     outPbipName = ""
 
-    optlist, args = getopt.getopt(argList, "hbrv:c:i:o:")
+    optlist, args = getopt.getopt(argList, "hrv:c:i:o:")
     for (opt, val) in optlist:
         if opt == '-h':
             usage(name)
             return
-        elif opt == '-b':
-            bddOnly = True
         elif opt == '-r':
             rename = True
         elif opt == '-v':
@@ -331,7 +361,7 @@ def run(name, argList):
         return
 
     start = datetime.datetime.now()
-    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel, bddOnly, rename)
+    generator = CnfGenerator(cnfName, inPbipName, outPbipName, verbLevel, rename)
     generator.run()
     delta = datetime.datetime.now() - start
     seconds = delta.seconds + 1e-6 * delta.microseconds

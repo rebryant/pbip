@@ -31,6 +31,7 @@ import queue
 
 import bdd
 import resolver
+import cardinality
 
 # Modulus options.  Values > 2 are actual moduli
 modulusNone = -1
@@ -1115,6 +1116,12 @@ class Constraint:
             break
         return True
 
+    def isCardinality(self):
+        for coeff in self.nz.values():
+            if abs(coeff) != 1:
+                return False
+        return True
+
     # Detect whether clause.  If so, return list of literals
     # If not, return None
     def getClause(self):
@@ -1207,10 +1214,17 @@ class Constraint:
         return self.cval <= 0 and len(self) == 0
 
     # generate constant if make all coefficients positive
-    def coefficientNormalizedCval(self):
+    def coefficientNormalizedConstant(self):
         incrs = [-a if a < 0 else 0 for a in self.nz.values()]
         return self.cval + sum(incrs)
 
+    def coefficientNormalizedLiterals(self):
+        vars = self.indices()
+        return [-v if self.nz[v] < 0 else v for v in vars]
+
+    def coefficientNormalizedCoefficients(self):
+        vars = self.indices()
+        return [abs(self.nz[v]) for v in vars]
 
     def opbString(self, forceEquality = False, coefficientNormalized = False):
         result = ""
@@ -1220,7 +1234,7 @@ class Constraint:
             else:
                 result += "%d x%d " % (v, k)
         rel = "=" if forceEquality else ">="
-        cval = self.coefficientNormalizedCval() if coefficientNormalized else self.cval
+        cval = self.coefficientNormalizedConstant() if coefficientNormalized else self.cval
         result += "%s %d" % (rel, cval)
         return result
 

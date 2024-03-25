@@ -382,6 +382,8 @@ private:
 	while (find_int(pbip_file, &id)) {
 	    clause_list = ilist_push(clause_list, id);
 	}
+	if (ilist_length(clause_list) == 0)
+	    err(true, "No clauses listed for Input #%d on line %d\n", line->get_id(), line_count+1);
 	print_proof_comment(2, "Processing Input #%d.  %d clauses", line->get_id(), ilist_length(clause_list));
 	if (only_bdd || ilist_length(clause_list) > 1) {
 	    tbdd t = ct->extract_tbdd(clause_list);
