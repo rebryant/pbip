@@ -36,16 +36,23 @@ class Constraint:
             return
         if cwriter.verbLevel >= 3:
             cwriter.doComment("Local clauses for constraint %s" % str(self))
-        if self.constant == 1:
-            self.clauseIds.append(cwriter.doClause([-self.xvar] + list(self.literals)))
-            return
-        lit = self.literals[0]
-        if self.high is not None:
-            self.clauseIds.append(cwriter.doClause([-self.xvar, -lit, self.high.xvar]))
-        if self.low is None:
-            self.clauseIds.append(cwriter.doClause([-self.xvar, lit]))
+        if self.high is not None or self.low is not None:
+            lit = self.literals[0]
+            if self.high is not None:
+                self.clauseIds.append(cwriter.doClause([-self.xvar, -lit, self.high.xvar]))
+            if self.low is None:
+                self.clauseIds.append(cwriter.doClause([-self.xvar, lit]))
+            else:
+                self.clauseIds.append(cwriter.doClause([-self.xvar, lit, self.low.xvar]))
         else:
-            self.clauseIds.append(cwriter.doClause([-self.xvar, lit, self.low.xvar]))
+            if self.constant == 1:
+                self.clauseIds.append(cwriter.doClause([-self.xvar] + list(self.literals)))
+            elif self.constant > len(self.literals):
+                self.clauseIds.append(cwriter.doClause([-self.xvar]))
+            if self.constant == len(self.literals):
+                for lit in self.literals:
+                    self.clauseIds.append(cwriter.doClause([-self.xvar, lit]))
+
 
     def addDescendantXvars(self, xvarSet):
         if self.xvar in xvarSet:
@@ -69,6 +76,8 @@ class Manager:
     constraintList = []
     # Dictionary of constraints 
     constraintDict = {}
+    # Should clause be expanded or inserted directly
+    emitClause = False
 
     def __init__(self, startXvar, cwriter):
         self.startXvar = startXvar
@@ -81,18 +90,27 @@ class Manager:
 
     def build(self, literals, constant):
         s = self.format(literals, constant)
-        self.cwriter.doComment("Added clauses for constraint %s" % s)
+        self.cwriter.doComment("Adding clauses for constraint %s" % s)
         if constant == 1:
             id = self.cwriter.doClause(literals)
             return [id]
+        if len(literals) < constant:
+            id = clauseIds.append(self.cwriter.doClause([]))
+            return [id]
+        if len(literals) == constant:
+            idList = []
+            for lit in literals:
+                idList.append(self.cwriter.doClause([lit]))
+            return idList
         lit = literals[0]
         rlits = literals[1:]
         high = self.find(rlits, constant-1)
         low = self.find(rlits, constant)
-        clauseIds = self.getClauseIds([low,high])
-        clauseIds.append(self.cwriter.doClause([-lit, high.xvar]))
-        clauseIds.append(self.cwriter.doClause([lit, low.xvar]))
-        return clauseIds
+        idList = self.getClauseIds([low,high])
+        idList.append(self.cwriter.doClause([-lit, high.xvar]))
+        idList.append(self.cwriter.doClause([lit, low.xvar]))
+        self.cwriter.doComment("Done with clauses for constraint %s" % s)
+        return idList
 
     def format(self, literals, constant):
         slist = ["x" + str(lit) if lit >= 0 else "~x" + str(-lit) for lit in literals]
@@ -108,7 +126,9 @@ class Manager:
         con = Constraint(literals, constant, xvar)
         self.constraintList.append(con)
         self.constraintDict[key] = con
-        if constant > 1:
+        if constant == 1 and len(literals) > 1 and not self.emitClause:
+            con.low = self.find(literals[1:], constant)
+        elif constant > 1:
             con.high = self.find(literals[1:], constant-1)
             if len(literals) > constant:
                 con.low = self.find(literals[1:], constant)
