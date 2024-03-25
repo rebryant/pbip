@@ -199,6 +199,8 @@ class CnfGenerator:
     inputVariableCount = 0
     # Map from tuple representation of clause to its ID
     clauseMap = {}
+    # Disable direct generation of cardinality constraints
+    useCardinality = False
     
     def __init__(self, cnfName, inPbipName, outPbipName, verbLevel, rename):
         self.verbLevel = verbLevel
@@ -275,6 +277,8 @@ class CnfGenerator:
         if not con.isCardinality():
             return True
         constant = con.coefficientNormalizedConstant()
+        if constant > 1 and not self.useCardinality:
+            return True
         literals = con.coefficientNormalizedLiterals()
         clist = self.cardinalityManager.build(literals, constant)
         self.hintList[cid-1] = clist
